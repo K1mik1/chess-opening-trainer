@@ -87,6 +87,16 @@ async function main() {
      'daily queue starts from the first unseen course (learning curve)');
   ok(ev(`COURSES[0].tier`) === 1, 'first course is a Beginner-tier course');
 
+  // themes
+  const swatches = window.document.querySelectorAll('.swatch');
+  ok(swatches.length === 3, '3 board themes available');
+  ok(window.document.body.classList.contains('theme-green'), 'default traditional theme (green) applied');
+  swatches[1].dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await delay(20);
+  ok(window.document.body.classList.contains('theme-walnut') &&
+     !window.document.body.classList.contains('theme-green'), 'switching theme swaps body class');
+  ok(ev('state.settings.theme') === 'walnut', 'theme choice persisted to state');
+
   // 1) Caro-Kann line #0 with a deliberate wrong move
   const r1 = await playLine('caro_kann#0', { injectWrong: true });
   ok(r1.wrongRejected, 'wrong move rejected (line did not advance, marked wrong)');

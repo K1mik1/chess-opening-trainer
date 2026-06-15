@@ -13,6 +13,18 @@ const $  = (s,r=document)=>r.querySelector(s);
 const $$ = (s,r=document)=>[...r.querySelectorAll(s)];
 const COURSES = window.REPERTOIRE;
 
+/* ---------------- board themes (traditional, chess.com / Lichess style) ------ */
+const THEMES = [
+  {id:'green',  name:'Tournament Green', light:'#eeeed2', dark:'#769656'},
+  {id:'walnut', name:'Walnut Parlor',    light:'#f0d9b5', dark:'#b58863'},
+  {id:'blue',   name:'Tournament Hall',  light:'#dee3e6', dark:'#8ca2ad'},
+];
+function applyTheme(id){
+  if(!THEMES.some(t=>t.id===id)) id='green';
+  document.body.classList.remove(...THEMES.map(t=>'theme-'+t.id));
+  document.body.classList.add('theme-'+id);
+}
+
 /* ---------------- date helpers (local day index) ---------------- */
 function today(){ const d=new Date(); d.setHours(0,0,0,0); return Math.round(d.getTime()/864e5); }
 
@@ -24,7 +36,7 @@ const DEFAULTS = () => ({
            sessionsDone:0, perfectSessions:0},
   cards:{},                 // cardId -> {seen,ease,interval,due,reps,lapses,lastGrade}
   badges:{},
-  settings:{muted:false, newPerDay:4, maxSession:14},
+  settings:{muted:false, newPerDay:4, maxSession:14, theme:'green'},
   lastSummary:null,
 });
 let state = load();
@@ -213,6 +225,28 @@ function renderHome(){
   }
   renderBadges($('#badgeRow'));
 
+  // board theme picker
+  const cur=state.settings.theme||'green';
+  const themeWrap=document.createElement('div');
+  themeWrap.style.cssText='margin:24px 0 4px;text-align:center';
+  themeWrap.innerHTML='<div style="color:var(--muted);font-size:.8rem;margin-bottom:9px;'+
+    'text-transform:uppercase;letter-spacing:.08em">Board theme</div>';
+  const sw=document.createElement('div'); sw.className='theme-swatches';
+  for(const t of THEMES){
+    const b=document.createElement('button');
+    b.className='swatch'+(cur===t.id?' active':''); b.title=t.name;
+    b.innerHTML=`<span class="sw-board">`+
+      `<i style="background:${t.light}"></i><i style="background:${t.dark}"></i>`+
+      `<i style="background:${t.dark}"></i><i style="background:${t.light}"></i></span>${t.name}`;
+    b.addEventListener('click',()=>{
+      state.settings.theme=t.id; save(); applyTheme(t.id);
+      $$('.swatch',sw).forEach(x=>x.classList.remove('active')); b.classList.add('active');
+    });
+    sw.appendChild(b);
+  }
+  themeWrap.appendChild(sw);
+  app.querySelector('.home').appendChild(themeWrap);
+
   // small footer: daily new-line setting + reset
   const foot=document.createElement('div');
   foot.style.cssText='margin-top:26px;text-align:center;color:var(--muted);font-size:.8rem';
@@ -225,7 +259,7 @@ function renderHome(){
   $('#npd').addEventListener('change',e=>{ state.settings.newPerDay=+e.target.value; save(); go('home'); });
   $('#resetLink').addEventListener('click',e=>{ e.preventDefault();
     if(confirm('Reset all progress, XP, streak and review schedule? This cannot be undone.')){
-      state=DEFAULTS(); save(); refreshTopbar(); go('home'); toast('Progress reset.',''); }
+      state=DEFAULTS(); save(); applyTheme(state.settings.theme); refreshTopbar(); go('home'); toast('Progress reset.',''); }
   });
 }
 function estMinutes(lines){ return Math.max(1, Math.round(lines*0.7)); }
@@ -602,7 +636,10 @@ function confetti(){ burst(140); } function miniConfetti(){ burst(60); }
 function burst(n){
   if(!cx) return;                       // no 2d canvas (e.g. headless) -> skip gracefully
   cvs.style.display='block'; resizeCvs();
-  const parts=[]; const colors=['#5b8cff','#7c5bff','#36d399','#ffcf5b','#ff5d6c'];
+  const cs=getComputedStyle(document.body);
+  const colors=['--accent','--accent2','--good','--gold','--bad']
+    .map(v=>cs.getPropertyValue(v).trim()||'#888');
+  const parts=[];
   for(let i=0;i<n;i++) parts.push({x:cvs.width/2+(Math.random()-.5)*200, y:cvs.height*0.25,
     vx:(Math.random()-.5)*9, vy:Math.random()*-8-2, g:0.28,
     s:6+Math.random()*7, c:colors[i%colors.length], r:Math.random()*6, vr:(Math.random()-.5)*.4});
@@ -625,6 +662,7 @@ function rolloverStreakCheck(){
   // if user missed a day, streak is recomputed on next completed session.
   // here we just display the stored streak (don't reset until a session).
 }
+applyTheme(state.settings.theme);
 refreshTopbar();
 rolloverStreakCheck();
 go('home');

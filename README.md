@@ -149,6 +149,10 @@ npm i jsdom && node build/test_ui.js   # full end-to-end UI play-through
   session, mastering an opening, and more.
 - Little touches: move sounds, confetti on perfect lines and level-ups (toggle
   sound with 🔊 in the top bar).
+- **Board themes** (pick at the bottom of the home screen): *Tournament Green*
+  (chess.com style, default), *Walnut Parlor* (warm wooden board), and
+  *Tournament Hall* (cool blue). All use a classic Staunton-style piece set and
+  a traditional game-room look.
 
 ---
 

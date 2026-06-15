@@ -1,31 +1,62 @@
 /* ============ Opening Trainer ============ */
 :root{
-  --bg:#0f1420; --bg2:#161d2e; --card:#1c2438; --card2:#222c44;
-  --ink:#e8edf7; --muted:#8a96b0; --line:#2a3550;
-  --accent:#5b8cff; --accent2:#7c5bff;
-  --good:#36d399; --bad:#ff5d6c; --gold:#ffcf5b;
-  --light:#e9edcc; --dark:#6f8a52;       /* board squares */
-  --sel:#f6e07b; --hl:rgba(123,160,91,.55); --hint:#5b8cff;
-  --radius:16px; --shadow:0 10px 30px rgba(0,0,0,.35);
+  /* shared, non-colour tokens */
+  --radius:9px;
+  --shadow:0 10px 26px rgba(0,0,0,.32);
   --font:"Segoe UI",system-ui,-apple-system,Roboto,sans-serif;
+  --serif:Georgia,"Iowan Old Style","Palatino Linotype","Times New Roman",serif;
+
+  /* ===== DEFAULT THEME: TOURNAMENT GREEN (cosy chess-club) ===== */
+  --bg:#262019; --bg2:#322a20; --bar:rgba(28,23,16,.9);
+  --card:#352d22; --card2:#41382b;
+  --ink:#f1e8d6; --muted:#a99a80; --line:#4b4133;
+  --accent:#7aa44f; --accent2:#5c8638;
+  --good:#7cb342; --bad:#cc5b52; --gold:#d9b35c;
+  --light:#eeeed2; --dark:#769656;            /* chess.com green board */
+  --frame:#2c2418;                             /* wooden board frame */
+  --sel:#f6ec73; --hl:rgba(246,236,90,.5); --hint:#4d86c4;
+}
+/* ===== WALNUT PARLOR (warm parchment room, wood board) ===== */
+body.theme-walnut{
+  --bg:#ddd0b6; --bg2:#e8dcc4; --bar:rgba(231,221,200,.9);
+  --card:#f3ecdb; --card2:#eaddc6;
+  --ink:#3a2f22; --muted:#7d6e58; --line:#cabfa3;
+  --accent:#8a6a37; --accent2:#6d5229;
+  --good:#5d8b3e; --bad:#b1483f; --gold:#a9761f;
+  --light:#f0d9b5; --dark:#b58863;            /* Lichess wood board */
+  --frame:#6b4f2f;
+  --sel:#d8b75c; --hl:rgba(176,125,39,.45); --hint:#4c7aa6;
+  --shadow:0 7px 20px rgba(74,54,28,.28);
+}
+/* ===== TOURNAMENT HALL (cool, clean, blue board) ===== */
+body.theme-blue{
+  --bg:#d5dbe1; --bg2:#e2e8ed; --bar:rgba(225,231,236,.92);
+  --card:#f1f5f8; --card2:#e5ecf0;
+  --ink:#23303a; --muted:#5f7280; --line:#c2ccd3;
+  --accent:#3f6f9f; --accent2:#2f567f;
+  --good:#3a8f6f; --bad:#c0504a; --gold:#b08a2e;
+  --light:#dee3e6; --dark:#8ca2ad;            /* Lichess blue board */
+  --frame:#46555f;
+  --sel:#f3df79; --hl:rgba(120,150,170,.5); --hint:#2f567f;
+  --shadow:0 7px 20px rgba(40,60,80,.22);
 }
 *{box-sizing:border-box}
 html,body{margin:0;height:100%}
 body{
-  background:radial-gradient(1200px 600px at 70% -10%,#1d2740 0,var(--bg) 55%);
+  background:radial-gradient(1200px 600px at 70% -10%,var(--bg2) 0,var(--bg) 60%);
   color:var(--ink);font-family:var(--font);-webkit-user-select:none;user-select:none;
-  overflow-x:hidden;
+  overflow-x:hidden;transition:background .3s,color .3s;
 }
 .muted{color:var(--muted)}
-h1{font-size:1.7rem;margin:.2em 0}
+h1{font-family:var(--serif);font-size:1.7rem;margin:.2em 0;font-weight:700}
 h2.section-title{font-size:1rem;letter-spacing:.08em;text-transform:uppercase;
   color:var(--muted);margin:1.6rem 0 .7rem}
 
 /* ---------- top bar ---------- */
 #topbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;
   justify-content:space-between;gap:12px;padding:12px 18px;
-  background:rgba(15,20,32,.82);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
-.brand{font-weight:700;font-size:1.15rem;cursor:pointer;white-space:nowrap}
+  background:var(--bar);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.brand{font-family:var(--serif);font-weight:700;font-size:1.2rem;cursor:pointer;white-space:nowrap}
 .stats{display:flex;align-items:center;gap:14px}
 .stat{font-weight:600;font-size:.95rem}
 .xpbar{position:relative;width:140px;height:14px;background:var(--card2);
@@ -60,8 +91,8 @@ h2.section-title{font-size:1rem;letter-spacing:.08em;text-transform:uppercase;
 .big-btn{display:block;width:100%;margin:18px 0 6px;padding:18px;font-size:1.15rem;
   font-weight:700;color:#fff;border:none;border-radius:var(--radius);cursor:pointer;
   background:linear-gradient(135deg,var(--accent),var(--accent2));
-  box-shadow:0 8px 24px rgba(91,140,255,.4);transition:transform .12s,box-shadow .12s}
-.big-btn:hover{transform:translateY(-2px);box-shadow:0 12px 30px rgba(91,140,255,.5)}
+  box-shadow:0 6px 16px rgba(0,0,0,.28);transition:transform .12s,box-shadow .12s}
+.big-btn:hover{transform:translateY(-2px);box-shadow:0 9px 20px rgba(0,0,0,.34)}
 .big-btn:active{transform:translateY(0)}
 .big-btn.small{font-size:1rem;padding:13px;width:auto;display:inline-block;margin:0}
 .due-summary{text-align:center;color:var(--muted);margin-bottom:8px;min-height:1.2em}
@@ -92,6 +123,15 @@ h2.section-title{font-size:1rem;letter-spacing:.08em;text-transform:uppercase;
   padding:2px 7px;font-weight:700}
 .due-pill.none{background:var(--card2);color:var(--muted)}
 
+.theme-swatches{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.swatch{display:flex;align-items:center;gap:7px;background:var(--card);border:1px solid var(--line);
+  border-radius:9px;padding:7px 12px;cursor:pointer;color:var(--ink);font-size:.8rem;font-weight:600}
+.swatch:hover{border-color:var(--accent)}
+.swatch.active{border-color:var(--accent);box-shadow:inset 0 0 0 2px var(--accent)}
+.sw-board{display:inline-grid;grid-template-columns:11px 11px;grid-template-rows:11px 11px;
+  border-radius:3px;overflow:hidden;box-shadow:0 0 0 1px rgba(0,0,0,.25)}
+.sw-board i{display:block}
+
 .badge-row{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
 .badge{display:flex;align-items:center;gap:7px;background:var(--card);border:1px solid var(--line);
   border-radius:99px;padding:7px 13px;font-size:.8rem}
@@ -102,7 +142,8 @@ h2.section-title{font-size:1rem;letter-spacing:.08em;text-transform:uppercase;
 .board-wrap{position:relative;width:min(92vw,520px);margin:10px auto}
 .board{position:relative;width:100%;aspect-ratio:1/1;display:grid;
   grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);
-  border-radius:10px;overflow:hidden;box-shadow:var(--shadow);touch-action:manipulation}
+  border-radius:4px;overflow:hidden;touch-action:manipulation;
+  box-shadow:0 0 0 9px var(--frame), 0 0 0 10px rgba(0,0,0,.25), 0 12px 28px rgba(0,0,0,.4)}
 .sq{position:relative;display:flex;align-items:center;justify-content:center}
 .sq.lt{background:var(--light)}
 .sq.dk{background:var(--dark)}
@@ -112,9 +153,8 @@ h2.section-title{font-size:1rem;letter-spacing:.08em;text-transform:uppercase;
 .sq.lt .coord{color:var(--dark)} .sq.dk .coord{color:var(--light)}
 .piece{font-size:min(11vw,62px);line-height:1;cursor:pointer;
   transition:transform .08s}
-.piece.white{color:#fafcff;text-shadow:0 1px 1px rgba(0,0,0,.35),0 0 2px #000,
-  -1px -1px 0 #888}
-.piece.black{color:#21262f;text-shadow:0 1px 1px rgba(255,255,255,.18)}
+.piece.white{color:#f7f2e6;text-shadow:0 0 1px #2b2b2b,0 1px 2px rgba(0,0,0,.45)}
+.piece.black{color:#262220;text-shadow:0 0 1px rgba(255,255,255,.28),0 1px 1px rgba(0,0,0,.3)}
 .sq.sel{box-shadow:inset 0 0 0 4px var(--sel)}
 .sq.lastfrom,.sq.lastto{background-image:radial-gradient(var(--hl),var(--hl))}
 .sq.hintfrom,.sq.hintto{box-shadow:inset 0 0 0 4px var(--hint)}
