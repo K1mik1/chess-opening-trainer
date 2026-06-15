@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.pyc
+
+# Node (only used transiently for tests)
+node_modules/
+package.json
+package-lock.json
+
+# Claude Code local settings (machine-specific)
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
