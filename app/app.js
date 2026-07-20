@@ -98,20 +98,60 @@ function schedule(id, grade){
 }
 
 /* ---------------- aggregate stats ---------------- */
+// Graduated mastery for a single card: 0 when never seen, ~0.38 once introduced,
+// climbing to 1.0 as the review interval reaches MATURE. This makes progress
+// visible immediately instead of only after a line survives ~3 weeks of reviews.
+function cardStrength(id){
+  const s=srs(id);
+  if(!s||!s.seen) return 0;
+  return Math.min(1, 0.35 + 0.65*(s.interval/MATURE));
+}
 function courseProgress(courseId){
   const list=CARDS_BY_COURSE[courseId];
-  let mature=0, due=0, seen=0;
+  let mature=0, due=0, seen=0, strength=0;
   for(const c of list){ const st=cardState(c.id);
-    if(st==='mature') mature++; if(st==='due') due++; if(st!=='new') seen++; }
-  return {total:list.length, mature, due, seen, pct:Math.round(mature/list.length*100)};
+    if(st==='mature') mature++; if(st==='due') due++; if(st!=='new') seen++;
+    strength+=cardStrength(c.id); }
+  return {total:list.length, mature, due, seen,
+          pct:Math.round(strength/list.length*100)};
 }
 function overallMastery(){
-  let m=0; for(const c of CARDS) if(cardState(c.id)==='mature') m++;
-  return Math.round(m/CARDS.length*100);
+  let strength=0; for(const c of CARDS) strength+=cardStrength(c.id);
+  return Math.round(strength/CARDS.length*100);
 }
 function dueCount(){ let d=0; for(const c of CARDS) if(cardState(c.id)==='due') d++; return d; }
 function newAvailable(){ let n=0; for(const c of CARDS) if(cardState(c.id)==='new') n++; return n; }
 function stars(pct){ return pct>=90?3 : pct>=60?2 : pct>=25?1 : 0; }
+
+/* ---------------- backlog catch-up (load balancing) ----------------
+   After a break, overdue reviews pile up. Rather than dumping them all as
+   "due today", we cap the daily review load and spread the excess across the
+   following days — the same load-balancing modern SRS (Anki/FSRS) uses.
+   Ordering is most-fragile-first (shortest interval, then most overdue), so
+   the lines you're likeliest to have forgotten come back first; well-learned
+   overdue lines are pushed furthest out (a small extra delay is harmless for
+   a memory that already survived the gap). No review is dropped — only when
+   it appears is redistributed, and the schedule self-corrects once you catch up. */
+function rebalanceBacklog(){
+  const t=today();
+  const cap=Math.max(1, state.settings.maxSession||14);
+  const overdue=[];
+  const load={};            // absolute day index -> count of on-time/future reviews
+  for(const c of CARDS){ const s=srs(c.id); if(!s||!s.seen) continue;
+    if(s.due<t) overdue.push(c.id);
+    else load[s.due]=(load[s.due]||0)+1;
+  }
+  // If today's load is already comfortable, leave the schedule untouched.
+  if(overdue.length + (load[t]||0) <= cap) return;
+  overdue.sort((a,b)=>{ const sa=srs(a), sb=srs(b);
+    return (sa.interval-sb.interval) || (sa.due-sb.due); });
+  let day=t;
+  for(const id of overdue){
+    while((load[day]||0)>=cap) day++;      // find the earliest day with spare capacity
+    srs(id).due=day; load[day]=(load[day]||0)+1;
+  }
+  save();
+}
 
 /* ---------------- level / xp ---------------- */
 function levelInfo(xp){ let lvl=1, need=100, rem=xp;
@@ -250,13 +290,20 @@ function renderHome(){
   // small footer: daily new-line setting + reset
   const foot=document.createElement('div');
   foot.style.cssText='margin-top:26px;text-align:center;color:var(--muted);font-size:.8rem';
+  const selCss='background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:7px;padding:3px 6px';
+  const rpdOpts=[...new Set([8,10,14,18,25,state.settings.maxSession])].sort((a,b)=>a-b);
   foot.innerHTML=`New lines per day:
-    <select id="npd" style="background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:7px;padding:3px 6px">
+    <select id="npd" style="${selCss}">
       ${[2,3,4,5,8].map(n=>`<option ${state.settings.newPerDay===n?'selected':''}>${n}</option>`).join('')}
+    </select>
+    &nbsp;·&nbsp; Reviews per day:
+    <select id="rpd" style="${selCss}" title="Caps how many reviews pile up per day — extras spread to later days">
+      ${rpdOpts.map(n=>`<option ${state.settings.maxSession===n?'selected':''}>${n}</option>`).join('')}
     </select>
     &nbsp;·&nbsp; <a id="resetLink" href="#" style="color:var(--muted)">Reset all progress</a>`;
   app.querySelector('.home').appendChild(foot);
   $('#npd').addEventListener('change',e=>{ state.settings.newPerDay=+e.target.value; save(); go('home'); });
+  $('#rpd').addEventListener('change',e=>{ state.settings.maxSession=+e.target.value; save(); rebalanceBacklog(); go('home'); });
   $('#resetLink').addEventListener('click',e=>{ e.preventDefault();
     if(confirm('Reset all progress, XP, streak and review schedule? This cannot be undone.')){
       state=DEFAULTS(); save(); applyTheme(state.settings.theme); refreshTopbar(); go('home'); toast('Progress reset.',''); }
@@ -456,6 +503,12 @@ function onReveal(){
 function finishCard(){
   const mistakes = play.wrong + play.hintMoves;
   const grade = session.learn ? null : gradeFromMistakes(mistakes);
+  if(session.learn){
+    // Learn mode doesn't grade, but completing a lesson should register the
+    // line as introduced (so it shows progress and gets scheduled for review).
+    const s=srs(play.card.id);
+    if(!s||!s.seen) schedule(play.card.id, 'good');
+  }
   if(grade){
     schedule(play.card.id, grade);
     session.results.push({id:play.card.id, grade, mistakes});
@@ -665,4 +718,5 @@ function rolloverStreakCheck(){
 applyTheme(state.settings.theme);
 refreshTopbar();
 rolloverStreakCheck();
+rebalanceBacklog();
 go('home');

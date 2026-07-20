@@ -45,7 +45,15 @@ No installation, no internet, no server.
 
 The scheduler shows each line again at growing intervals (1 day → 3 → a week →
 weeks) when you get it right, and brings it back fast when you slip. A line is
-counted **"mastered"** once it survives to a 3-week interval.
+counted **"mastered"** once it survives to a 3-week interval; the **Mastery %**
+and ★ ratings climb gradually as you learn and strengthen each line, so progress
+shows from your very first session.
+
+**Missed a few days?** No problem — reviews won't pile into an overwhelming wall.
+The app caps how many reviews land on any single day (**Reviews per day**,
+adjustable at the bottom of the home screen) and spreads any backlog across the
+following days, most-fragile-lines-first. Nothing is skipped; the load just
+smooths out so picking it back up stays a quick 5–10 minutes.
 
 ---
 
@@ -143,8 +151,9 @@ npm i jsdom && node build/test_ui.js   # full end-to-end UI play-through
 
 - **XP** for every correct move (+ bonus for a flawless line), **levels**, and a
   daily **🔥 streak**.
-- **Mastery %** and ★ ratings per opening; an overall mastery ring on the home
-  screen.
+- **Mastery %** and ★ ratings per opening (graduated — they grow as you learn a
+  line and strengthen with each successful review); an overall mastery ring on
+  the home screen.
 - **Badges**: first session, 7- and 30-day streaks, 100 moves, a flawless
   session, mastering an opening, and more.
 - Little touches: move sounds, confetti on perfect lines and level-ups (toggle
