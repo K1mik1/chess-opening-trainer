@@ -518,6 +518,9 @@ function finishCard(){
     if(grade==='again' && session.mode!=='line' && session.requeues<6 && !play.requeued){
       session.queue.push(play.card); session.requeues++; play.requeued=true;
     }
+    // Every reviewed line counts on its own — credit the day and check badges
+    // now, so quitting mid-session never loses your streak or an earned badge.
+    creditStudyDay(); refreshTopbar(); checkBadges();
   }
   save();
   session.idx++;
@@ -526,18 +529,22 @@ function finishCard(){
   updateSessBar();
 }
 
+// Advance the daily streak the moment you review your first line today — you
+// don't need to finish the whole session for the day to count. Idempotent: it
+// runs per reviewed line but only credits the day once.
+function creditStudyDay(){
+  const t=today(), p=state.profile;
+  if(p.lastDay===t) return;
+  p.streak = (p.lastDay===t-1)? p.streak+1 : 1;
+  p.lastDay=t; p.bestStreak=Math.max(p.bestStreak||0, p.streak);
+}
 function finishSession(){
   $('#sessBarFill').style.width='100%';
   const p=state.profile;
   const completed = session.results.length;
   if(!session.learn && completed>0){
     p.sessionsDone++;
-    // streak
-    const t=today();
-    if(p.lastDay!==t){
-      p.streak = (p.lastDay===t-1)? p.streak+1 : 1;
-      p.lastDay=t; p.bestStreak=Math.max(p.bestStreak||0, p.streak);
-    }
+    creditStudyDay();
     const allPerfect = session.results.every(r=>r.grade==='easy');
     if(allPerfect) p.perfectSessions++;
   }
