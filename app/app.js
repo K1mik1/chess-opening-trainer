@@ -49,6 +49,38 @@ function load(){
 }
 function save(){ try{ localStorage.setItem(SKEY, JSON.stringify(state)); }catch(e){ /* storage blocked: keep running in-memory */ } }
 
+// Progress lives only in this browser's localStorage, scoped to this origin — so a
+// new machine, a different browser, or a cleared cache starts from zero. These two
+// let you take it with you.
+function exportProgress(){
+  const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`opening-trainer-progress-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast('Progress exported.','');
+}
+function importProgress(){
+  const inp=document.createElement('input');
+  inp.type='file'; inp.accept='application/json,.json';
+  inp.onchange=async ()=>{
+    const f=inp.files&&inp.files[0]; if(!f) return;
+    let s; try{ s=JSON.parse(await f.text()); }
+    catch(e){ toast('That file is not valid JSON.',''); return; }
+    if(!s||s.v!==1){ toast('Not an Opening Trainer backup.',''); return; }
+    const inc=s.profile&&s.profile.xp||0, cur=state.profile.xp||0;
+    if(cur>inc && !confirm(`This backup has ${inc} XP but you currently have ${cur}. Overwrite anyway?`)) return;
+    // Route through the same normalisation load() uses, so older backups still work.
+    const d=DEFAULTS();
+    state={...d,...s, profile:{...d.profile,...s.profile},
+           settings:{...d.settings,...s.settings}, cards:s.cards||{}, badges:s.badges||{}};
+    save(); applyTheme(state.settings.theme); refreshTopbar(); go('home');
+    toast(`Restored ${state.profile.xp} XP, ${Object.keys(state.cards).length} cards.`,'');
+  };
+  inp.click();
+}
+
 /* ---------------- card model (enumerate every variation) ---------------- */
 let CARDS=[];                 // flat list
 const CARD_BY_ID={};
@@ -300,8 +332,13 @@ function renderHome(){
     <select id="rpd" style="${selCss}" title="Caps how many reviews pile up per day — extras spread to later days">
       ${rpdOpts.map(n=>`<option ${state.settings.maxSession===n?'selected':''}>${n}</option>`).join('')}
     </select>
-    &nbsp;·&nbsp; <a id="resetLink" href="#" style="color:var(--muted)">Reset all progress</a>`;
+    &nbsp;·&nbsp; <a id="resetLink" href="#" style="color:var(--muted)">Reset all progress</a>
+    <br><span style="opacity:.75">Progress is stored only in this browser.
+    <a id="exportLink" href="#" style="color:var(--muted)">Back up to a file</a>
+    &nbsp;·&nbsp; <a id="importLink" href="#" style="color:var(--muted)">Restore from a file</a></span>`;
   app.querySelector('.home').appendChild(foot);
+  $('#exportLink').addEventListener('click',e=>{ e.preventDefault(); exportProgress(); });
+  $('#importLink').addEventListener('click',e=>{ e.preventDefault(); importProgress(); });
   $('#npd').addEventListener('change',e=>{ state.settings.newPerDay=+e.target.value; save(); go('home'); });
   $('#rpd').addEventListener('change',e=>{ state.settings.maxSession=+e.target.value; save(); rebalanceBacklog(); go('home'); });
   $('#resetLink').addEventListener('click',e=>{ e.preventDefault();
