@@ -64,6 +64,7 @@
 
     <div class="train-info">
       <div class="line-name" id="lineName">—</div>
+      <div class="line-sub" id="lineSub"></div>
       <div class="turn-prompt" id="turnPrompt"></div>
       <div class="moves" id="moveList"></div>
       <div class="train-actions">
@@ -89,6 +90,17 @@
   </section>
 </template>
 
+<!-- ====== COACH / WEAKNESS REPORT TEMPLATE ====== -->
+<template id="tpl-coach">
+  <section class="view coach">
+    <button class="back" data-nav="home">‹ Back</button>
+    <h1>How you've been playing</h1>
+    <p class="muted summary">Read straight off your real chess.com games by Stockfish.
+      Everything you practise is chosen from this.</p>
+    <div id="coachBody"></div>
+  </section>
+</template>
+
 <!-- ====== SESSION SUMMARY TEMPLATE ====== -->
 <template id="tpl-summary">
   <div class="modal-back" id="summaryModal">
@@ -109,6 +121,11 @@
 <div id="toastHost"></div>
 
 <script src="repertoire.js"></script>
+<!-- Generated from your chess.com games. Optional: if these two are absent the
+     app still runs as a pure opening trainer. coach.js must load before app.js,
+     which calls into it during the first render. -->
+<script src="exercises.js"></script>
+<script src="coach.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

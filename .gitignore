@@ -13,3 +13,13 @@ package-lock.json
 # OS
 .DS_Store
 Thumbs.db
+
+# Personal-coach data: your games, engine analysis, the puzzle DB and the
+# generated exercise set. All rebuildable with build/refresh.sh, and it is
+# your own game history -- not something to commit.
+data/
+app/exercises.js
+
+# Your local settings (chess.com username, any overrides). The tracked
+# build/coach_config.json holds the shared defaults.
+build/coach_config.local.json

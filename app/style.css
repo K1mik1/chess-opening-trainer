@@ -238,3 +238,65 @@ h2.section-title{font-size:1rem;letter-spacing:.08em;text-transform:uppercase;
   .stats .xpbar{width:90px}
   .brand{font-size:1rem}
 }
+
+/* =====================================================================
+   COACH  --  tactics packs and the weakness report
+   All colour comes from the existing theme tokens, so these re-theme with
+   the board. Charts here are single-series magnitude comparisons: one hue,
+   a recessive track, and the value labelled directly on each row rather
+   than an axis to read against.
+   ===================================================================== */
+
+.line-sub{font-size:.78rem;color:var(--muted);margin-top:2px}
+.tag.calc{background:#3b2f52;color:#ded0f5}
+.puzzle-card .cc-bar>div{background:linear-gradient(90deg,var(--accent),var(--gold))}
+.game-link{display:inline-block;margin-left:8px;font-size:.78rem;color:var(--muted)}
+
+.link-btn{background:none;border:0;color:var(--accent);cursor:pointer;
+  font:inherit;font-size:.72rem;letter-spacing:.04em;text-transform:none;padding:0 0 0 10px}
+.link-btn:hover{text-decoration:underline}
+
+/* ---- headline numbers: a stat tile, not a chart ---- */
+.coach-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));
+  gap:12px;margin:18px 0 6px}
+.ctile{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  padding:14px 14px 12px}
+.ctile b{display:block;font-size:1.7rem;line-height:1.1;font-family:var(--serif)}
+.ctile span{display:block;font-size:.74rem;text-transform:uppercase;letter-spacing:.07em;
+  color:var(--muted);margin-top:4px}
+.ctile small{display:block;font-size:.72rem;color:var(--muted);opacity:.8;margin-top:6px}
+
+.coach-h{margin:26px 0 4px;font-size:.95rem;letter-spacing:.05em;text-transform:uppercase}
+.coach-note{color:var(--muted);font-size:.84rem;margin:0 0 12px;line-height:1.5}
+.coach-verdict{background:var(--card);border-left:3px solid var(--gold);
+  border-radius:0 var(--radius) var(--radius) 0;padding:11px 14px;margin:12px 0 0;
+  font-size:.86rem;line-height:1.5}
+
+/* ---- horizontal bars ---- */
+.hbars{display:flex;flex-direction:column;gap:8px}
+.hbar{display:grid;grid-template-columns:minmax(96px,34%) 1fr auto;align-items:center;gap:10px}
+.hb-lab{font-size:.82rem;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hb-track{background:var(--card2);border-radius:4px;height:14px;overflow:hidden}
+.hb-track>i{display:block;height:100%;background:var(--accent);
+  border-radius:0 4px 4px 0;transition:width .5s}
+.hb-val{font-size:.8rem;color:var(--muted);min-width:34px;text-align:right;font-variant-numeric:tabular-nums}
+.hbar.worst .hb-track>i{background:var(--bad)}
+.hb-val em{font-style:normal;font-size:.68rem;text-transform:uppercase;letter-spacing:.06em;
+  color:var(--bad);margin-left:5px}
+
+.coach-table{width:100%;border-collapse:collapse;font-size:.84rem;margin-top:6px}
+.coach-table th{text-align:left;font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;
+  color:var(--muted);font-weight:600;padding:6px 8px;border-bottom:1px solid var(--line)}
+.coach-table td{padding:7px 8px;border-bottom:1px solid var(--line)}
+.coach-table tr:last-child td{border-bottom:0}
+.coach-foot{margin-top:26px;font-size:.74rem;color:var(--muted);opacity:.8;line-height:1.6}
+.coach-foot code,.coach-note code{background:var(--card2);padding:1px 5px;border-radius:4px;
+  font-family:ui-monospace,monospace;font-size:.95em}
+
+/* ---- calculation mode: make the frozen board unmistakable ---- */
+body.blind-mode .board{box-shadow:0 0 0 3px var(--gold) inset}
+body.blind-mode .board-wrap::after{content:"🧠 calculating — board frozen";
+  position:absolute;top:-9px;left:50%;transform:translateX(-50%);
+  background:var(--gold);color:#1c1710;font-size:.66rem;font-weight:700;
+  letter-spacing:.07em;text-transform:uppercase;padding:3px 10px;border-radius:99px;
+  white-space:nowrap;z-index:5}

@@ -33,10 +33,11 @@ const SKEY = 'openingTrainer.v1';
 const DEFAULTS = () => ({
   v:1,
   profile:{xp:0, streak:0, bestStreak:0, lastDay:null, totalMoves:0,
-           sessionsDone:0, perfectSessions:0},
+           sessionsDone:0, perfectSessions:0,
+           puzzleRating:null, puzzlesDone:0, puzzlesSolved:0},
   cards:{},                 // cardId -> {seen,ease,interval,due,reps,lapses,lastGrade}
   badges:{},
-  settings:{muted:false, newPerDay:4, maxSession:14, theme:'green'},
+  settings:{muted:false, newPerDay:4, maxSession:14, theme:'green', tacticsPerDay:6},
   lastSummary:null,
 });
 let state = load();
@@ -164,12 +165,17 @@ function stars(pct){ return pct>=90?3 : pct>=60?2 : pct>=25?1 : 0; }
    overdue lines are pushed furthest out (a small extra delay is harmless for
    a memory that already survived the gap). No review is dropped — only when
    it appears is redistributed, and the schedule self-corrects once you catch up. */
+// Openings and puzzles share one review schedule, so the daily load is
+// balanced across both -- otherwise a pile-up of puzzles would quietly blow
+// past the "10 minutes a day" the whole app is built around.
+function allCards(){ return typeof PUZZLES!=='undefined' ? CARDS.concat(PUZZLES) : CARDS; }
+
 function rebalanceBacklog(){
   const t=today();
-  const cap=Math.max(1, state.settings.maxSession||14);
+  const cap=Math.max(1, (state.settings.maxSession||14)+(state.settings.tacticsPerDay||0));
   const overdue=[];
   const load={};            // absolute day index -> count of on-time/future reviews
-  for(const c of CARDS){ const s=srs(c.id); if(!s||!s.seen) continue;
+  for(const c of allCards()){ const s=srs(c.id); if(!s||!s.seen) continue;
     if(s.due<t) overdue.push(c.id);
     else load[s.due]=(load[s.due]||0)+1;
   }
@@ -229,6 +235,10 @@ function go(view, arg){
   clearView();
   if(view==='home') renderHome();
   else if(view==='course') renderCourse(arg);
+  // Coach views live in coach.js, which is optional — fall back home rather
+  // than throwing if someone reaches these without a build.
+  else if(view==='pack')  { if(typeof renderPack==='function')  renderPack(arg); else return go('home'); }
+  else if(view==='coach') { if(typeof renderCoach==='function') renderCoach();   else return go('home'); }
   document.body.dataset.view=view;
 }
 document.addEventListener('click', e=>{
@@ -259,12 +269,18 @@ function renderHome(){
   // due summary
   const due=dueCount(), nw=Math.min(newAvailable(), state.settings.newPerDay);
   const nextNew=CARDS.find(c=>cardState(c.id)==='new');
+  const tac=(typeof buildTacticsQueue==='function')
+    ? buildTacticsQueue(state.settings.tacticsPerDay||0).length : 0;
   const ds=$('#dueSummary');
-  if(due+nw>0) ds.innerHTML = `<b>${due}</b> line${due===1?'':'s'} due for review` +
-      (nw? ` · <b>${nw}</b> new to learn` : '') + ` — about ${estMinutes(due+nw)} min` +
+  const total=due+nw+tac;
+  if(total>0) ds.innerHTML =
+      (due+nw>0 ? `<b>${due+nw}</b> opening line${due+nw===1?'':'s'}` : '') +
+      (due+nw>0 && tac>0 ? ' · ' : '') +
+      (tac>0 ? `<b>${tac}</b> tactics` : '') +
+      ` — about ${estMinutes(due+nw, tac)} min` +
       (nw&&nextNew? `<br><span style="font-size:.92em">next up: <b>${courseById(nextNew.courseId).name}</b></span>` : '');
   else if(newAvailable()>0) ds.innerHTML=`No reviews due. Tap to learn <b>${Math.min(newAvailable(),state.settings.newPerDay)}</b> new line(s).`;
-  else ds.innerHTML='🎉 All caught up! Nothing due today — come back tomorrow, or drill any opening below.';
+  else ds.innerHTML='🎉 All caught up! Nothing due today — come back tomorrow, or drill anything below.';
 
   $('#startBtn').addEventListener('click', startDaily);
 
@@ -295,6 +311,11 @@ function renderHome(){
     for(const c of COURSES.filter(x=>(x.tier||1)===t)) grid.appendChild(buildCard(c));
     group.appendChild(grid); host.appendChild(group);
   }
+  // tactics / weakness packs, if a coach build is present
+  if(typeof renderTacticsSection==='function'){
+    renderTacticsSection(app.querySelector('.home'));
+  }
+
   renderBadges($('#badgeRow'));
 
   // board theme picker
@@ -332,6 +353,10 @@ function renderHome(){
     <select id="rpd" style="${selCss}" title="Caps how many reviews pile up per day — extras spread to later days">
       ${rpdOpts.map(n=>`<option ${state.settings.maxSession===n?'selected':''}>${n}</option>`).join('')}
     </select>
+    ${typeof hasCoach==='function'&&hasCoach() ? `&nbsp;·&nbsp; Tactics per day:
+    <select id="tpd" style="${selCss}" title="How many puzzles ride along in the daily session">
+      ${[0,3,4,6,8,12].map(n=>`<option ${state.settings.tacticsPerDay===n?'selected':''}>${n}</option>`).join('')}
+    </select>` : ''}
     &nbsp;·&nbsp; <a id="resetLink" href="#" style="color:var(--muted)">Reset all progress</a>
     <br><span style="opacity:.75">Progress is stored only in this browser.
     <a id="exportLink" href="#" style="color:var(--muted)">Back up to a file</a>
@@ -341,12 +366,19 @@ function renderHome(){
   $('#importLink').addEventListener('click',e=>{ e.preventDefault(); importProgress(); });
   $('#npd').addEventListener('change',e=>{ state.settings.newPerDay=+e.target.value; save(); go('home'); });
   $('#rpd').addEventListener('change',e=>{ state.settings.maxSession=+e.target.value; save(); rebalanceBacklog(); go('home'); });
+  const tpd=$('#tpd');
+  if(tpd) tpd.addEventListener('change',e=>{ state.settings.tacticsPerDay=+e.target.value; save(); go('home'); });
   $('#resetLink').addEventListener('click',e=>{ e.preventDefault();
     if(confirm('Reset all progress, XP, streak and review schedule? This cannot be undone.')){
       state=DEFAULTS(); save(); applyTheme(state.settings.theme); refreshTopbar(); go('home'); toast('Progress reset.',''); }
   });
 }
-function estMinutes(lines){ return Math.max(1, Math.round(lines*0.7)); }
+// A memorised opening line is quick; a puzzle you have to actually work out is
+// not. Weighting them the same made the daily estimate read low once tactics
+// joined the session, which matters when the whole promise is "10 minutes".
+function estMinutes(lines, puzzles=0){
+  return Math.max(1, Math.round(lines*0.6 + puzzles*1.0));
+}
 
 /* ---------------- COURSE DETAIL ---------------- */
 function renderCourse(courseId){
@@ -412,14 +444,19 @@ function renderBadges(host){
 let board, boardWrap, overlay, session=null, play=null, engineBusy=false, selected=null, whiteBottom=true;
 
 function buildDailyQueue(){
-  const t=today();
   const reviews=CARDS.filter(c=>cardState(c.id)==='due')
                      .sort((a,b)=>srs(a.id).due-srs(b.id).due)
                      .slice(0,state.settings.maxSession);
   let budget=Math.max(0, state.settings.maxSession-reviews.length);
   budget=Math.min(budget, state.settings.newPerDay);
   const news=CARDS.filter(c=>cardState(c.id)==='new').slice(0,budget);
-  return reviews.concat(news);
+  const openings=reviews.concat(news);
+
+  // Tactics ride along in the same session. Openings come first (they are
+  // quick and warm you up on familiar ground), then the harder puzzles.
+  const tactics = (typeof buildTacticsQueue==='function')
+    ? buildTacticsQueue(state.settings.tacticsPerDay||0) : [];
+  return openings.concat(tactics);
 }
 function startDaily(){
   const q=buildDailyQueue();
@@ -445,14 +482,23 @@ function beginSession(queue, mode, learn){
 }
 
 function startCard(card){
-  play={card, color:card.color, edges:card.edges, fen:STARTFEN, step:0,
-        wrong:0, hintMoves:0, wrongThisMove:0, hintThisMove:false, requeued:false};
+  // Opening lines always begin from the initial position; puzzles carry their
+  // own start position. Everything downstream is identical.
+  const start = card.startFen || STARTFEN;
+  play={card, color:card.color, edges:card.edges, fen:start, step:0,
+        wrong:0, hintMoves:0, wrongThisMove:0, hintThisMove:false, requeued:false,
+        blind: !!card.blind, shownFen:start};
   whiteBottom = card.color==='white';
-  renderBoard(STARTFEN, whiteBottom);
-  $('#lineName').textContent = `${card.courseName} — ${shortName(card.name,card.courseName)}`;
+  renderBoard(start, whiteBottom);
+  $('#lineName').textContent = card.isPuzzle
+    ? `${card.courseName} — ${card.name}`
+    : `${card.courseName} — ${shortName(card.name,card.courseName)}`;
   $('#moveList').innerHTML='';
+  const sub=$('#lineSub');
+  if(sub) sub.textContent = card.isPuzzle ? puzzleSubtitle(card) : '';
   updateSessBar();
   $('#hintBtn').disabled=$('#revealBtn').disabled=false;
+  document.body.classList.toggle('blind-mode', !!play.blind);
   selected=null;
   setTimeout(processStep, session.learn?500:350);
 }
@@ -462,11 +508,19 @@ function updateSessBar(){
 }
 
 function processStep(){
+  if(!viewAlive()) return;
   if(play.step>=play.edges.length){ return finishCard(); }
   const edge=play.edges[play.step];
   if(edge.mine && !session.learn){
     play.awaiting=true; selected=null;
-    setPrompt(`Your move as ${play.color}. What's the book move?`, '');
+    const first = !play.edges.slice(0,play.step).some(e=>e.mine);
+    if(play.card.isPuzzle){
+      setPrompt(first ? puzzlePrompt(play.card)
+                      : (play.blind ? 'Keep going — from the position in your head.'
+                                    : 'Good. And now?'), '');
+    } else {
+      setPrompt(`Your move as ${play.color}. What's the book move?`, '');
+    }
   } else {
     play.awaiting=false;
     if(session.learn && edge.mine) setPrompt(`Book move: ${edge.san}`,'good');
@@ -510,7 +564,10 @@ function onBoardClick(e){
   } else {
     play.wrong++; play.wrongThisMove++;
     badFeedback(from, square);
-    setPrompt(`Not the book move here — try again.`, 'bad');
+    setPrompt(play.card.isPuzzle
+      ? (play.blind ? 'Not it — recheck your line from the position in your head.'
+                    : 'Not the strongest move here — look again.')
+      : 'Not the book move here — try again.', 'bad');
     if(play.wrongThisMove>=2) highlightHint(edge.from, null);   // nudge after 2 misses
   }
 }
@@ -538,6 +595,13 @@ function onReveal(){
 }
 
 function finishCard(){
+  // In calculation mode the board has been frozen the whole time -- play the
+  // solution back so you can see what you were visualising before moving on.
+  if(play.blind && !play.replayed){
+    play.replayed=true;
+    setPrompt('Here is the line you calculated.','good');
+    return replayLine(()=>finishCard());
+  }
   const mistakes = play.wrong + play.hintMoves;
   const grade = session.learn ? null : gradeFromMistakes(mistakes);
   if(session.learn){
@@ -549,6 +613,22 @@ function finishCard(){
   if(grade){
     schedule(play.card.id, grade);
     session.results.push({id:play.card.id, grade, mistakes});
+    // Puzzles rate you as much as you rate them: a clean solve nudges your
+    // puzzle rating up, so the app keeps serving material at the right level
+    // without waiting for the next rebuild.
+    if(play.card.isPuzzle && typeof updatePuzzleRating==='function'){
+      const clean = mistakes===0;
+      updatePuzzleRating(play.card, clean);
+      if(clean) state.profile.puzzlesSolved=(state.profile.puzzlesSolved||0)+1;
+      const url=play.card.meta && play.card.meta.gameUrl;
+      if(url && play.card.meta.kind!=='theme'){
+        const ml=$('#moveList');
+        if(ml){ const a=document.createElement('a');
+          a.href=url; a.target='_blank'; a.rel='noopener';
+          a.className='game-link'; a.textContent='view the game ↗';
+          ml.appendChild(a); }
+      }
+    }
     if(grade==='easy'){ addXp(25); toast('Perfect line! +25 XP','good'); miniConfetti(); }
     else if(grade==='good'){ addXp(10); }
     // re-queue lapses once for immediate relearn (daily/course only)
@@ -674,7 +754,24 @@ function flyPiece(from,to,ch,dur,cb){
   requestAnimationFrame(()=>{ fly.style.transform=`translate(calc(-50% + ${b.x-a.x}px), calc(-50% + ${b.y-a.y}px))`; });
   setTimeout(()=>{ fly.remove(); cb&&cb(); }, dur+30);
 }
+// Move animations run on timers. If you press Back (or the session ends) while
+// one is in flight, the view it was drawing into is already gone -- so every
+// deferred step checks the board is still on screen before touching the DOM.
+function viewAlive(){ return !!board && document.body.contains(board); }
+
 function playEdge(edge, cb){
+  if(!viewAlive()) return;
+  // Calculation mode: advance the real position but leave the board alone, so
+  // every move after the first has to be found in your head. Click handling
+  // still validates against play.fen -- the true position -- which is exactly
+  // the skill being trained: if you mis-visualised, your click misses.
+  if(play.blind){
+    play.fen=edge.node.fen;
+    addMoveChip(edge);
+    engineBusy=false;
+    cb&&cb();
+    return;
+  }
   const map=parseFEN(play.fen);
   const ch=map[edge.from];
   // hide moving source piece during the flight
@@ -686,6 +783,7 @@ function playEdge(edge, cb){
     if(rch) flyPiece(edge.castle.from, edge.castle.to, rch, 220, null);
   }
   const finish=()=>{
+    if(!viewAlive()) return;
     play.fen=edge.node.fen;
     renderBoard(play.fen, whiteBottom);
     highlightLast(edge.from, edge.to);
@@ -695,8 +793,25 @@ function playEdge(edge, cb){
   };
   if(ch) flyPiece(edge.from, edge.to, ch, 220, finish); else finish();
 }
+// Animate a whole solved line from its start position. Used to show a
+// calculation puzzle's answer once the board comes back.
+function replayLine(cb){
+  const start = play.card.startFen || STARTFEN;
+  play.blind=false;
+  play.fen=start;
+  renderBoard(start, whiteBottom);
+  let i=0;
+  (function next(){
+    if(!viewAlive()) return;
+    if(i>=play.edges.length){ setTimeout(cb,600); return; }
+    const edge=play.edges[i++];
+    playEdge(edge, ()=>setTimeout(next,120));
+  })();
+}
+
 function addMoveChip(edge){
   const ml=$('#moveList');
+  if(!ml) return;                       // view was left mid-animation
   const chip=document.createElement('span');
   chip.className='mv'+(edge.mine?' me':'');
   chip.textContent=edge.san;

@@ -1,0 +1,44 @@
+{
+  "_comment": "Settings for the personal-coach pipeline (fetch -> analyze -> exercises).",
+  "username": "",
+  "_username_help": "Your chess.com username. Everything else works once this is set.",
+  "time_classes": [
+    "bullet",
+    "blitz",
+    "rapid",
+    "daily"
+  ],
+  "months_back": 6,
+  "rated_only": true,
+  "engine": {
+    "path": "auto",
+    "threads": 4,
+    "hash_mb": 512,
+    "scan_depth": 12,
+    "scan_nodes": 150000,
+    "verify_depth": 18,
+    "verify_nodes": 800000,
+    "multipv": 3
+  },
+  "max_games": 400,
+  "thresholds": {
+    "_comment": "Centipawn loss (from the mover's point of view) that defines each error class.",
+    "inaccuracy": 50,
+    "mistake": 120,
+    "blunder": 250,
+    "_verify_min_loss": "Scan-loss a move needs before earning a deep verify.",
+    "verify_min_loss": 100,
+    "max_verify_per_game": 20,
+    "_winning_cap": "Evals are clamped to +/- this before differencing, so 'winning by more' isn't punished.",
+    "clamp": 1000
+  },
+  "exercises": {
+    "own_mistakes_max": 70,
+    "punish_max": 25,
+    "endgame_max": 15,
+    "lichess_per_theme": 35,
+    "lichess_themes_tracked": 6,
+    "rating_band": 300,
+    "calculation_min_plies": 5
+  }
+}

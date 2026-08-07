@@ -79,7 +79,9 @@ async function main() {
   await delay(100);
 
   ok(!!window.document.querySelector('.view.home'), 'home view rendered');
-  ok(window.document.querySelectorAll('.course-card').length === 12, '12 course cards shown');
+  // scoped to the openings grid -- the tactics packs reuse .course-card too
+  ok(window.document.querySelectorAll('#courseGrid .course-card').length === 12,
+     '12 course cards shown');
   ok(window.document.querySelectorAll('.tier-group').length >= 2, 'courses grouped into difficulty tiers');
   ok(ev('typeof startLine') === 'function', 'app globals reachable for driving');
   // daily scheduler introduces the FIRST course (curriculum order) first

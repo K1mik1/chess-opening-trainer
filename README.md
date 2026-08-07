@@ -1,8 +1,49 @@
-# ♞ Opening Trainer
+# ♞ Chess Trainer
 
-A small, offline, gamified app to memorize the main book moves of a focused
-chess opening repertoire — built to take an ~800 player toward 1000+ in
-**5–10 minutes a day** over months.
+A small, offline, gamified chess trainer with two halves:
+
+1. **An opening trainer** — memorize a focused repertoire of real book moves,
+   with spaced repetition.
+2. **A personal coach** — Stockfish reads your actual chess.com games, works out
+   what you keep getting wrong, and builds tactics, calculation and endgame
+   exercises aimed at exactly that.
+
+Both run in one browser page, offline, with no server and no build step. The
+target is **5–10 minutes a day** for a beginner-to-intermediate player.
+
+---
+
+## Quick start
+
+```bash
+git clone <this repo> && cd chess-opening-trainer
+
+# macOS
+brew install stockfish zstd && pip3 install chess
+
+# Debian/Ubuntu
+sudo apt install stockfish zstd python3-pip && pip3 install chess
+
+./setup.sh          # asks for your chess.com username, then builds everything
+```
+
+Then open **`app/index.html`** in your browser.
+
+`setup.sh` checks your dependencies, downloads the Lichess puzzle database,
+analyses your games and offers to schedule a refresh every two weeks. The first
+analysis takes 15-30 minutes for a few hundred games (250 blitz games on an
+8-core M-series Mac took 16); every run after that only looks at games it has
+not seen, so it finishes in a couple of minutes.
+
+**Just want the opening trainer?** Skip `setup.sh` entirely and open
+`app/index.html`. The coach is optional — the app works without it.
+
+> Your chess.com username lives in `build/coach_config.local.json`, which is
+> gitignored. Nothing personal is committed if you fork this.
+
+---
+
+## The opening trainer
 
 You play your openings move by move; the app plays the opponent's book replies
 and tells you **right or wrong** for each of your moves. A spaced-repetition
@@ -57,7 +98,12 @@ smooths out so picking it back up stays a quick 5–10 minutes.
 
 ---
 
-## Your repertoire
+## The default repertoire
+
+The repertoire that ships here is one example, aimed at a sub-1200 player who
+wants a complete, low-theory answer to everything they will actually meet. It is
+**not** meant to be the repertoire — see *[Make it yours](#make-it-yours)* to
+swap in your own lines.
 
 **12 courses · 41 variations · 192 book moves to memorize.** Each course has a
 main line plus its most-played sidelines, and is tagged with a difficulty tier
@@ -100,50 +146,41 @@ openings before the theory-heavy ones. The home screen shows which opening is
 ## How it works (for the curious / to extend it)
 
 ```
-chess-program/
-├── app/                  ← THE APP (this is all you need to use it)
+chess-opening-trainer/
+├── setup.sh              ← one-command setup for a fresh clone
+├── app/                  ← THE APP (open index.html; nothing else needed)
 │   ├── index.html
 │   ├── style.css
 │   ├── app.js            ← board, trainer engine, spaced repetition, gamification
-│   └── repertoire.js     ← generated move-tree (DB-verified). Do not hand-edit.
-└── build/                ← tools to (re)generate & test the data
+│   ├── coach.js          ← puzzle model, adaptive difficulty, weakness report
+│   ├── repertoire.js     ← generated opening tree (DB-verified). Not hand-edited.
+│   └── exercises.js      ← generated from your games. Absent until you build it.
+└── build/
     ├── eco/*.tsv         ← the Lichess ECO opening database (source of truth)
     ├── repertoire.py     ← the repertoire definition (edit this to change lines)
     ├── generate.py       ← compiles + verifies repertoire.py → app/repertoire.js
     ├── probe.py          ← asks the DB "what are the book replies after <line>?"
-    ├── test_tree.js      ← validates the generated tree's integrity
-    └── test_ui.js        ← drives the real UI in jsdom end-to-end
+    │
+    ├── conf.py           ← config loading (tracked defaults + local overrides)
+    ├── fetch_games.py    ← 1. chess.com → data/games/          (incremental)
+    ├── analyze_games.py  ← 2. Stockfish, two passes            (cached per game)
+    ├── themes.py         ←    tactical motif detection (SEE, forks, pins, …)
+    ├── weaknesses.py     ← 3. analysis → your weakness profile
+    ├── lichess_puzzles.py←    filters the puzzle DB by theme + rating
+    ├── build_exercises.py← 4. profile → app/exercises.js
+    ├── refresh.sh        ←    runs 1–4; safe to re-run any time
+    ├── get_puzzle_db.sh  ←    downloads the Lichess puzzle database
+    ├── install_schedule.sh ←  the fortnightly launchd/cron job
+    └── test_*.js|py      ←    the test suites
 ```
 
 The app needs **no chess engine at runtime**: the build precomputes the board
 position (FEN), the piece's from/to squares, and the opening name for every
-move. At runtime a move is simply "correct" if it matches the one book move for
-that position, so there is nothing to get wrong.
+move. At runtime a move is simply "correct" if it matches the precomputed one,
+which is why both openings and tactics run from a `file://` URL with no server.
 
-### To change or grow the repertoire
-
-1. Edit `build/repertoire.py` — add or change lines (sequences of moves).
-2. Not sure what the book continuation is? Ask the database:
-   ```
-   python build/probe.py "e4 c6 d4 d5 e5 Bf5"
-   ```
-   It lists exactly the replies the master database knows, with names.
-3. Rebuild (requires Python + `python-chess`):
-   ```
-   pip install chess
-   python build/generate.py
-   ```
-   It **refuses to build** if any move you wrote isn't a real book move, and
-   refuses if a position has two of *your* moves (ambiguous). On success it
-   rewrites `app/repertoire.js`.
-
-### To run the tests
-
-```
-python build/generate.py        # rebuild + verify every move is in book
-node   build/test_tree.js        # structural integrity of the move-tree
-npm i jsdom && node build/test_ui.js   # full end-to-end UI play-through
-```
+A **tactics puzzle and an opening line are the same object** — a start position
+plus a list of move-edges — so one trainer engine plays both.
 
 ---
 
@@ -165,7 +202,255 @@ npm i jsdom && node build/test_ui.js   # full end-to-end UI play-through
 
 ---
 
+# 🎯 The personal coach (tactics from your real games)
+
+The opening trainer above teaches you moves. This part works out **why you
+actually lose games** — by reading your real chess.com history — and builds the
+exercises to fix it.
+
+Nothing here is hand-written advice: Stockfish analyses every move you played,
+and the practice set is assembled from what it finds.
+
+`./setup.sh` sets all of this up (see [Quick start](#quick-start)). You do
+**not** need to download anything from chess.com by hand, and there is no login
+or API key — finished games are public data.
+
+## Keeping it current automatically
+
+```bash
+./build/install_schedule.sh            # refresh on the 1st and 15th, 03:30
+./build/install_schedule.sh --status   # is it running? when did it last run?
+./build/install_schedule.sh --remove   # stop
+```
+
+A plain `launchd` job on macOS, a crontab entry elsewhere — no Claude, no
+subscription, no network service. It re-reads your recent games, re-diagnoses
+your weaknesses, and rebuilds the exercises around whatever you are getting
+wrong *lately*.
+
+Two things make it safe to leave unattended: if a refresh fails (offline,
+engine missing) your existing exercises are left exactly as they were, and
+because analysis is cached per game it only ever looks at games it has not seen.
+You can also just run `./build/refresh.sh` yourself whenever you like.
+
+## What it builds
+
+| Pack | What it trains |
+|------|----------------|
+| **Your own blunders** | The exact positions where you went wrong. "You played Rd1 here and it threw the game away — find what you missed." |
+| **Punish the mistake** | Positions where your opponent blundered and you let them off. |
+| **What did that allow?** | The position *after* your blunder, played from the other side. Training the refutation is how you learn to see it coming. |
+| **Calculation ladder** | Multi-move forcing lines solved **blind** — the board does not move until you have entered the whole sequence, then it replays your line. This trains calculation depth, not pattern recall. |
+| **Themed drills** | Fresh Lichess puzzles on your *measured* top weaknesses, at your level, so you meet each pattern often enough to internalise it. |
+| **Endgame technique** | Converting won positions and holding difficult ones. |
+
+Puzzles share the opening trainer's spaced-repetition scheduler, XP and streak,
+and ride along in the same daily session — so the routine stays one 10-minute
+sitting, now roughly half openings and half tactics (adjust at the bottom of the
+home screen).
+
+Difficulty is **adaptive**: puzzles are bundled across a wide rating band and the
+app maintains your puzzle rating with an Elo update on every solve, so the level
+self-corrects between rebuilds.
+
+## The weakness report
+
+Tap **"see the full report ›"** on the home screen for what the engine found:
+where your points actually go (ranked by centipawns thrown away, not raw
+frequency), which phase of the game you go wrong in, whether your blunders
+cluster when the clock is low, how often you convert your opponents' mistakes,
+and which openings you genuinely face. A plain-text copy lands in
+`data/report.txt` after every refresh.
+
+## How the pipeline works
+
+*(File layout is in [How it works](#how-it-works-for-the-curious--to-extend-it) above.)*
+
+Analysis is deliberately two-pass: a cheap **scan** of every position on a node
+budget to find where the evaluation swung, then a deep **verify** with MultiPV
+only on the flagged ones. The verify pass is what makes a position usable as a
+puzzle — a position only becomes an exercise if the best move is clearly better
+than the second best, so you are never asked to guess between two reasonable
+moves and told you were wrong.
+
+Verification is also *gated*: only moves the scan already thinks lost ~1 pawn
+earn a deep search, and no more than 20 per game. Nothing downstream consumes
+inaccuracies — both the weakness ranking and the puzzle selection require a
+mistake or a blunder — so this roughly halves the runtime without dropping a
+single exercise.
+
+Each analysed game is cached, and cached records carry a schema version, so
+adding a field to the analysis correctly invalidates old caches instead of
+silently mixing formats.
+
+### One-time setup, done manually
+
+`setup.sh` wraps all of this, but each stage is a normal script you can run
+alone:
+
+```bash
+python3 build/fetch_games.py --username YOUR_NAME   # 1
+python3 build/analyze_games.py --jobs 8             # 2  (the slow one)
+python3 build/weaknesses.py                         # 3  prints the report
+python3 build/build_exercises.py                    # 4  writes app/exercises.js
+```
+
+---
+
+# Make it yours
+
+Everything personal is either gitignored or a single config value, so a fork
+needs no code changes to become yours.
+
+### Your settings
+
+`build/coach_config.local.json` (gitignored) overrides
+`build/coach_config.json` (tracked defaults), key by key. Create it by running
+`./setup.sh`, or by hand:
+
+```json
+{
+  "username": "your_chesscom_name",
+  "time_classes": ["rapid", "blitz"],
+  "months_back": 12,
+  "contact": "you@example.com"
+}
+```
+
+This split means `git pull` brings you improved defaults without touching your
+settings, and your username never appears in a commit.
+
+| Setting | Default | What it does |
+|---------|---------|--------------|
+| `time_classes` | all four | Which games to learn from. Rapid-only gives the cleanest read on your understanding; bullet mostly measures your mouse. |
+| `months_back` | 6 | How much history to pull. |
+| `rated_only` | true | Ignore casual games. |
+| `max_games` | 400 | Cap on games analysed, newest first. |
+| `engine.scan_nodes` | 150k | Effort per position in the cheap first pass. |
+| `engine.verify_depth` | 18 | Depth for confirming a mistake and finding the answer. |
+| `thresholds.verify_min_loss` | 100 | How bad a move must look before earning a deep search. Raise it to make analysis faster and coarser. |
+| `thresholds.blunder` | 250 | Centipawns lost that counts as a blunder. |
+| `exercises.lichess_per_theme` | 35 | Puzzles pulled per weak theme. |
+| `exercises.rating_band` | 300 | Width of the puzzle difficulty window around your level. |
+
+If a full analysis is too slow on your machine, the two knobs that matter most
+are `max_games` and `thresholds.verify_min_loss`.
+
+### Your repertoire
+
+The openings in `build/repertoire.py` are just data — a list of courses, each a
+list of move sequences in SAN.
+
+```python
+{
+  "id": "italian", "color": "white", "tier": 1,
+  "name": "Italian Game",
+  "summary": "...",
+  "lines": ["e4 e5 Nf3 Nc6 Bc4 Bc5 d3 Nf6 O-O", ...],
+}
+```
+
+Not sure what the book continuation is? Ask the bundled ECO database:
+
+```bash
+python3 build/probe.py "e4 c6 d4 d5 e5 Bf5"
+```
+
+Then rebuild. The build **refuses** to write anything if a move you invented
+isn't in the database, or if a position leaves you two different moves to play:
+
+```bash
+python3 build/generate.py
+```
+
+Because every position is verified at build time, the app itself needs no chess
+engine at runtime — which is why it opens straight from a `file://` URL.
+
+### Not a chess.com player?
+
+`build/fetch_games.py` is the only chess.com-specific file: it turns an
+account name into `data/games/index.json`, a list of records with a `pgn` field
+plus `color`, `result`, `time_class` and `time_control`. Write an equivalent for
+Lichess (`https://lichess.org/api/games/user/<name>`) or a folder of PGN files
+and the remaining three stages work unchanged.
+
+### Troubleshooting
+
+**`pip3 install chess` fails with "externally-managed-environment"**
+Newer Pythons refuse to install into the system interpreter. Use a virtualenv:
+```bash
+python3 -m venv .venv && source .venv/bin/activate && pip install chess
+```
+Activate it before running the scripts. The scheduled refresh runs without your
+shell, so if you use a venv, add its `bin` directory to the `PATH` line at the
+top of `build/refresh.sh`.
+
+**"stockfish not found"**
+`brew install stockfish` / `sudo apt install stockfish`. If it lives somewhere
+unusual, set `engine.path` in `build/coach_config.local.json` to the full path.
+
+**"chess.com has no player called ..."**
+Usernames are the ones in your profile URL (`chess.com/member/<name>`), not your
+display name.
+
+**No exercises got built**
+You need finished, *rated*, standard-chess games in the time controls listed in
+`time_classes`. A brand-new account, or one that only plays variants, produces
+nothing. Set `"rated_only": false` or widen `time_classes` to loosen this.
+
+**Analysis is too slow**
+Lower `max_games`, raise `thresholds.verify_min_loss`, or lower
+`engine.verify_depth`. You can also stop it at any point — every finished game
+is already cached, so re-running picks up where it left off.
+
+**The app shows openings but no tactics**
+`app/exercises.js` is missing or empty — run `./build/refresh.sh` and check
+`data/logs/`.
+
+### Platform support
+
+Tested on macOS. The Python pipeline is platform-independent; the only
+OS-specific piece is scheduling, and `build/install_schedule.sh` uses launchd on
+macOS and falls back to a crontab entry elsewhere. On Windows, run
+`build/refresh.sh` under WSL or Git Bash and schedule it with Task Scheduler.
+
+---
+
+### Tests
+
+```bash
+node build/test_tree.js     # opening move-tree integrity
+node build/test_ui.js       # opening trainer, driven in a real DOM
+node build/test_coach.js    # exercises load, solve, calculation mode, report
+python3 build/test_themes.py  # tactical motif detection (SEE, forks, pins…)
+```
+
+`test_coach.js` also checks the app still works **without** `exercises.js` — the
+coach layer is entirely optional, and the opening trainer runs unchanged if you
+never set it up.
+
+---
+
 ## Data source & credit
 
 Opening moves and names: **[lichess-org/chess-openings](https://github.com/lichess-org/chess-openings)**
 (the ECO database Lichess itself uses), licensed CC0. Bundled in `build/eco/`.
+
+Practice puzzles: the **[Lichess puzzle database](https://database.lichess.org/#puzzles)**,
+licensed CC0. Downloaded locally, never redistributed here.
+
+Game history: the **[chess.com public API](https://www.chess.com/news/view/published-data-api)**.
+
+Analysis: **[Stockfish](https://stockfishchess.org/)**, which you install
+yourself and which this project runs as a separate process — no Stockfish code
+is included or linked here.
+
+## License
+
+This project is MIT (see `LICENSE`). The bundled ECO opening data in
+`build/eco/` is CC0. The Lichess puzzle database is CC0 and is downloaded at
+setup time rather than redistributed. Stockfish is GPL-3.0 and is used as an
+external program, not bundled.
+
+Your games, your analysis and your generated exercises never leave your
+machine, and are gitignored so a fork of this repo carries none of them.
