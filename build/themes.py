@@ -141,11 +141,17 @@ def _valuable_targets(board, square, mover_color):
 
 
 def is_fork(board, move):
-    """`move` lands a piece that now attacks two or more worthwhile targets."""
+    """`move` lands a piece that now attacks two or more worthwhile targets.
+
+    At least one target has to be a real piece (or the king). Hitting two
+    loose pawns is a double attack, but it is not the pattern that costs
+    beginners games, and counting it as one buries the ones that do.
+    """
     after = board.copy(stack=False)
     mover = board.turn
     after.push(move)
-    return len(_valuable_targets(after, move.to_square, mover)) >= 2
+    targets = _valuable_targets(after, move.to_square, mover)
+    return len(targets) >= 2 and any(v >= 3 for _sq, v in targets)
 
 
 def _aligned_motifs(board, move):
@@ -184,10 +190,19 @@ def _aligned_motifs(board, move):
                 break
         if first is not None and second is not None:
             fv, sv = VALUE.get(first.piece_type, 0), VALUE.get(second.piece_type, 0)
-            if fv > sv:
+            back_is_king = second.piece_type == chess.KING
+            if fv > sv and fv >= 3:
+                # front piece is the valuable one: it must move, and what is
+                # behind it falls
                 found.add("skewer")
-            elif sv >= fv:
-                found.add("pin")
+            elif back_is_king or sv > fv:
+                # front piece is stuck, because moving it exposes something
+                # worth more. Only worth the name if there is something to win.
+                if back_is_king or sv >= 3:
+                    found.add("pin")
+            # equal values (pawn behind pawn, knight behind bishop) are just an
+            # alignment, not a motif -- naming them here was inflating "Pins"
+            # into the top weakness and filling the drill set with noise.
     return found
 
 

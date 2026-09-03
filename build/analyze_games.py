@@ -45,9 +45,17 @@ MERGED = os.path.join(ROOT, "data", "analysis.json")
 
 CLK_RE = re.compile(r"\[%clk\s+(\d+):(\d+):([\d.]+)\]")
 
-# Bump when the per-game record gains or changes fields. Cached analyses with
-# an older schema are recomputed rather than silently used with fields missing.
-SCHEMA = 3
+# Bump when the per-game record gains or changes fields, OR when a themes.py
+# detector changes -- the tags are part of the record, and a stale tag is worse
+# than a missing field because nothing downstream can tell it is stale. Cached
+# analyses with an older schema are recomputed rather than silently reused.
+#
+# 4: tightened the pin and fork detectors. "Pins" had been counting any two
+#    enemy pieces stacked on a line, pawn-behind-pawn included, which made it
+#    the top-ranked weakness on volume alone and filled the drill set with
+#    positions that were not pins. If you only need the new tags and not a
+#    fresh search, build/retag.py recomputes them from the cache in seconds.
+SCHEMA = 4
 
 
 # ---------------------------------------------------------------------------
