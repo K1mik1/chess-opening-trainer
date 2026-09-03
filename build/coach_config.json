@@ -36,9 +36,11 @@
     "own_mistakes_max": 70,
     "punish_max": 25,
     "endgame_max": 15,
-    "lichess_per_theme": 35,
-    "lichess_themes_tracked": 6,
     "rating_band": 300,
-    "calculation_min_plies": 5
+    "calculation_min_plies": 5,
+    "_own_max_reps": "Clean solves before one of your own blunder positions retires. Past 2 you are recalling the board, not learning the pattern -- the lessons take over from there.",
+    "own_max_reps": 2,
+    "_lessons_max": "How many lessons to diagnose. Each one is a diagnosis, a habit and a 3-rung drill ladder, so this is the real size of your daily practice.",
+    "lessons_max": 6
   }
 }

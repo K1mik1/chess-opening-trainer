@@ -30,6 +30,7 @@ from datetime import date
 import chess
 
 import conf
+import lessons as LESSONS
 import lichess_puzzles as LP
 import weaknesses as P
 import conf
@@ -160,6 +161,10 @@ def own_mistake_cards(games, cfg):
         out.append(card(f"own#{e['ply']}#{g['id'][-8:]}", start_fen, edges, {
             "color": g["color"],
             "kind": "own",
+            # Retire after this many clean solves. A tactic you have solved
+            # twice is a position you remember, not a pattern you have
+            # learned -- the pattern is what the lessons drill.
+            "maxReps": cfg["exercises"]["own_max_reps"],
             "title": "Your blunder" if e["severity"] == "blunder" else "Your mistake",
             "played": e["played"],
             "cpLoss": e["cp_loss"],
@@ -315,6 +320,140 @@ def puzzle_rating_band(prof, cfg):
     return centre, (max(400, centre - band), centre + band + 200)
 
 
+
+# ---------------------------------------------------------------------------
+# lessons: a diagnosis plus a progressive ladder of FRESH material
+# ---------------------------------------------------------------------------
+
+# Each rung is (id, label, rating offset from your band centre, how many).
+# The offsets are what makes this deliberate practice rather than review: you
+# start just below where you are, and the top rung is deliberately past it.
+LADDER = [
+    ("warmup",  "Same pattern, easier",  (-250, -50),  12),
+    ("level",   "At your level",         (-50, 150),   20),
+    ("stretch", "Past your level",       (150, 400),   12),
+]
+
+
+def lesson_specs(lessons, centre, cfg):
+    """One puzzle-selection spec per lesson rung, in one DB pass."""
+    specs = []
+    for L in lessons:
+        for rung, _label, (lo_off, hi_off), count in LADDER:
+            shift = L.get("ratingShift", 0)
+            specs.append({
+                "key": f"lesson:{L['id']}:{rung}",
+                "themes": set(L["themes"]),
+                "rating": (max(400, centre + lo_off + shift),
+                           centre + hi_off + shift),
+                # ask for extra: rungs share themes, so we hand out unique
+                # puzzles per lesson afterwards and need slack to do it
+                "count": count * 3,
+            })
+    return specs
+
+
+def build_lessons(data, selected, games, cfg):
+    """Attach drill pools to each lesson, keeping every puzzle unique.
+
+    Lessons overlap by theme -- three of them may all want forks -- and
+    lichess_puzzles.select is deterministic, so asking twice returns the same
+    puzzles. Handing them out first-come means no lesson ever drills a
+    position another lesson already owns, which is what lets the app promise
+    that a review is always material you have not seen.
+    """
+    diagnosed = LESSONS.build(data)
+    if not diagnosed:
+        return []
+
+    # index your own error positions so a lesson can open with them
+    by_key = {}
+    for g in games:
+        for e in g.get("errors") or []:
+            by_key[(g["id"], e["ply"])] = (g, e)
+
+    used = set()
+    out = []
+    for L in diagnosed:
+        stages = []
+
+        # rung 0 -- two of your own positions, capped at two solves each
+        own_cards = []
+        for ref in L.get("ownPositions", []):
+            hit = by_key.get((ref["gameId"], ref["ply"]))
+            if not hit:
+                continue
+            g, e = hit
+            start_fen = e.get("prev_fen") or e["fen"]
+            ucis = ([e["prev_uci"]] if e.get("prev_uci") and e.get("prev_fen")
+                    else []) + e["pv"]
+            edges = make_edges(start_fen, ucis, g["color"], max_plies=6)
+            if not edges:
+                continue
+            own_cards.append(card(
+                f"L-{L['id']}-own#{e['ply']}#{g['id'][-8:]}", start_fen, edges, {
+                    "color": g["color"], "kind": "own",
+                    "title": "From your game",
+                    "played": e["played"], "cpLoss": e["cp_loss"],
+                    "maxReps": cfg["exercises"]["own_max_reps"],
+                    "themes": [t for t in e["themes"] if t not in P.PHASE_TAGS],
+                    "gameUrl": g["url"], "endTime": g["end_time"],
+                    "moveNumber": e["move_number"], "timeClass": g["time_class"],
+                    "lessonId": L["id"],
+                }))
+        if own_cards:
+            stages.append({
+                "id": "own", "name": "See it in your own game",
+                "blurb": "Proof this is about you, not about chess in general. "
+                         "These two retire once you have solved them.",
+                "cards": own_cards, "retires": True})
+
+        # rungs 1-3 -- fresh puzzles, unique to this lesson
+        for rung, label, _off, count in LADDER:
+            pool = selected.get(f"lesson:{L['id']}:{rung}", [])
+            fresh = [p for p in pool if p["id"] not in used][:count]
+            for p in fresh:
+                used.add(p["id"])
+            cards = lesson_puzzle_cards(fresh, L["id"], rung, label)
+            if cards:
+                stages.append({
+                    "id": rung, "name": label,
+                    "blurb": ("Drawn from a pool -- a review gives you "
+                              "positions you have not seen, not the same one "
+                              "again."),
+                    "cards": cards, "retires": False})
+
+        if len(stages) < 2:
+            continue
+        out.append({
+            "id": L["id"], "title": L["title"],
+            "diagnosis": L["diagnosis"], "principle": L["principle"],
+            "habit": L["habit"], "note": L.get("note"),
+            "themes": L["themes"], "evidence": L["evidence"],
+            "stages": stages,
+        })
+    return out
+
+
+def lesson_puzzle_cards(puzzles, lesson_id, rung, label):
+    out = []
+    for p in puzzles:
+        if set(p["themes"]) & BAD_THEMES:
+            continue
+        board = chess.Board(p["fen"])
+        solver = "black" if board.turn == chess.WHITE else "white"
+        edges = make_edges(p["fen"], p["moves"], solver)
+        if not edges:
+            continue
+        out.append(card(f"L-{lesson_id}-{rung}#{p['id']}", p["fen"], edges, {
+            "color": solver, "kind": "lesson", "title": label,
+            "rating": p["rating"], "lessonId": lesson_id, "rung": rung,
+            "themes": [t for t in p["themes"] if t not in P.PHASE_TAGS],
+            "gameUrl": p["url"], "source": "lichess",
+        }))
+    return out
+
+
 # ---------------------------------------------------------------------------
 # main
 # ---------------------------------------------------------------------------
@@ -360,18 +499,16 @@ def main():
                      "side and punish it — that's how you learn to see it coming.",
             "items": ref})
 
-    # ---------- 2. themed reinforcement + calculation ----------
+    # ---------- 2. lessons + calculation ----------
+    # The per-theme packs that used to live here are gone: a pack called
+    # "Pins" with 35 pin puzzles tells you nothing about WHY you lose to
+    # pins, and its puzzles never changed between rebuilds. Lessons replace
+    # them with a diagnosis, a habit, and a rating ladder over a pool -- see
+    # build/lessons.py.
     centre, (lo, hi) = puzzle_rating_band(prof, cfg)
-    top = [w["theme"] for w in prof.get("weaknesses", [])
-           if w["theme"] not in P.PHASE_TAGS][:cfg["exercises"]["lichess_themes_tracked"]]
-    # Always cover the fundamentals, even in a clean sample.
-    for fallback in ("hangingPiece", "fork", "pin"):
-        if fallback not in top:
-            top.append(fallback)
-    top = top[:cfg["exercises"]["lichess_themes_tracked"]]
+    diagnosed = LESSONS.build(data, limit=cfg["exercises"]["lessons_max"])
 
-    specs = [{"key": t, "themes": {t}, "rating": (lo, hi),
-              "count": cfg["exercises"]["lichess_per_theme"]} for t in top]
+    specs = lesson_specs(diagnosed, centre, cfg)
     # Calculation: long forcing lines, deliberately a bit harder than your
     # tactics band because depth is the skill being trained, not speed.
     specs.append({"key": "_calc", "themes": {"long", "veryLong"},
@@ -386,24 +523,17 @@ def main():
     # every exercise built from your own games -- just no themed reinforcement.
     if LP.available():
         print(f"Selecting Lichess puzzles (rating {lo}-{hi}, centred {centre})")
-        print(f"  themes: {', '.join(top)}")
+        print(f"  lessons: {', '.join(L['id'] for L in diagnosed)}")
         selected = LP.select(specs)
     else:
         selected = {}
         print("\n[note] Lichess puzzle database not found — building only the packs\n"
-              "       from your own games. To add themed drills, calculation and\n"
-              "       endgame practice, download it once:\n"
+              "       from your own games. Lessons will have a diagnosis and a\n"
+              "       habit but no drill ladder. To add the drills, download it\n"
+              "       once:\n"
               "         ./build/get_puzzle_db.sh\n")
 
-    for t in top:
-        items = lichess_cards(selected.get(t, []), "theme", f"lc-{t}", T.LABELS.get(t, t))
-        if items:
-            w = next((x for x in prof.get("weaknesses", []) if x["theme"] == t), None)
-            blurb = (f"{w['count']} serious errors from this pattern in your games "
-                     f"({w['share']}% of everything you lost)."
-                     if w else "A fundamental pattern worth keeping sharp.")
-            packs.append({"id": f"theme-{t}", "name": T.LABELS.get(t, t),
-                          "kind": "theme", "theme": t, "blurb": blurb, "items": items})
+    lesson_packs = build_lessons(data, selected, games, cfg)
 
     calc = lichess_cards(selected.get("_calc", []), "calc", "calc", "Calculate it out")
     calc = [c for c in calc if c["myMoves"] >= 2]
@@ -443,6 +573,7 @@ def main():
         "username": prof.get("username"),
         "profile": summary,
         "packs": packs,
+        "lessons": lesson_packs,
     }
     with open(OUT, "w", encoding="utf-8") as fh:
         fh.write("// AUTO-GENERATED by build/build_exercises.py -- do not edit by hand.\n")
@@ -455,6 +586,12 @@ def main():
     print(f"\n[ OK ] {len(packs)} packs · {total} exercises")
     for p in packs:
         print(f"       {p['name']:<34} {len(p['items']):>4}")
+
+    drills = sum(len(s["cards"]) for L in lesson_packs for s in L["stages"])
+    print(f"\n[ OK ] {len(lesson_packs)} lessons · {drills} drill positions")
+    for L in lesson_packs:
+        rungs = " ".join(f"{s['id']}:{len(s['cards'])}" for s in L["stages"])
+        print(f"       {L['title'][:44]:<46} {rungs}")
     print(f"\nWrote {OUT}  ({os.path.getsize(OUT)/1024:.0f} KB)")
 
 

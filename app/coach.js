@@ -48,6 +48,158 @@ const PUZZLES_BY_PACK = {};
 const packById = id => PACKS.find(p => p.id === id);
 const hasCoach = () => PUZZLES.length > 0;
 
+/* =====================================================================
+   LESSONS  --  spaced repetition on the SKILL, not on the position.
+
+   The packs above schedule POSITIONS: card 47 comes back on day 9, then
+   day 23, forever. That is right for an opening move and wrong for a
+   tactic. Once you have solved "you hung the knight on f6 in that game"
+   twice, seeing it again tests whether you remember that board, not
+   whether you would spot the pattern in a new one.
+
+   So a lesson is the unit here. The lesson has a due date; when it comes
+   up you get FRESH positions from its pool at your current rung. Your own
+   two positions open the lesson and then retire (meta.maxReps). Solve
+   enough cleanly at a rung and you move up to harder material, which is
+   the "just past what you can already do" part of deliberate practice.
+   Get it wrong repeatedly and you drop back a rung rather than grinding.
+   ===================================================================== */
+
+const LESSONS = (EXDATA && EXDATA.lessons) ? EXDATA.lessons : [];
+const LESSON_BY_ID = {};
+const LESSON_CARDS = [];
+const LESSON_CARD_BY_ID = {};
+(function enumerateLessons(){
+  for(const L of LESSONS){
+    LESSON_BY_ID[L.id] = L;
+    L.stageById = {};
+    for(const st of L.stages){
+      L.stageById[st.id] = st;
+      st.cardObjs = [];
+      for(const item of st.cards){
+        // the build already emits ids prefixed L-<lesson>-<rung>, so they are
+        // unique and stable across rebuilds -- which keeps your history valid
+        const card = {
+          id: item.id, isPuzzle: true, isLesson: true,
+          lessonId: L.id, stageId: st.id, packId: 'lesson-' + L.id,
+          courseName: L.title, name: (item.meta && item.meta.title) || st.name,
+          color: item.color, startFen: item.startFen, edges: item.edges,
+          myMoves: item.myMoves, meta: item.meta || {},
+        };
+        st.cardObjs.push(card);
+        LESSON_CARDS.push(card);
+        LESSON_CARD_BY_ID[card.id] = card;
+      }
+    }
+  }
+})();
+const hasLessons = () => LESSONS.length > 0;
+
+// Clean solves needed at a rung before you move up. Your own positions only
+// need to be seen; the graded rungs need a real run of them.
+const RUNG_TARGET = {own: 2, warmup: 4, level: 6, stretch: 5};
+// Below this accuracy at a rung, the rung is too hard -- step back down.
+const RUNG_FLOOR = 0.5;
+const RUNG_MIN_TRIES = 6;
+
+function lessonSrs(id){
+  let s = state.lessons[id];
+  if(!s){
+    s = state.lessons[id] = {rung:0, clean:0, tries:0, reps:0, lapses:0,
+                             interval:0, due:today(), seen:false, mastered:false};
+  }
+  return s;
+}
+function lessonState(id){
+  const s = state.lessons[id];
+  if(!s || !s.seen) return 'new';
+  return s.due <= today() ? 'due' : 'learning';
+}
+function lessonStage(L){
+  const s = lessonSrs(L.id);
+  return L.stages[Math.min(s.rung, L.stages.length - 1)];
+}
+function lessonProgress(L){
+  const s = lessonSrs(L.id);
+  const target = RUNG_TARGET[lessonStage(L).id] || 5;
+  const rungPct = Math.min(1, s.clean / target);
+  const pct = (s.rung + rungPct) / L.stages.length;
+  return {pct: Math.round(pct * 100), rung: s.rung, clean: s.clean,
+          target, mastered: s.mastered};
+}
+
+// Which lesson to spend today on. Costliest-first, but a lesson you have
+// already started outranks one you have not, so you finish what you begin.
+function lessonPriority(L){
+  const s = lessonSrs(L.id);
+  const cost = (L.evidence && L.evidence.cpLost) || 0;
+  const started = s.seen ? 1.35 : 1.0;
+  const overdue = Math.max(0, today() - s.due);
+  return cost * started + overdue * 500;
+}
+
+/* Record one solved lesson card and move the rung if earned. */
+function creditLesson(card, solvedClean){
+  const L = LESSON_BY_ID[card.lessonId];
+  if(!L) return;
+  const s = lessonSrs(L.id);
+  s.seen = true;
+  s.tries++;
+  if(solvedClean) s.clean++; else s.clean = Math.max(0, s.clean - 1);
+
+  const stage = lessonStage(L);
+  const target = RUNG_TARGET[stage.id] || 5;
+
+  if(s.clean >= target){
+    if(s.rung < L.stages.length - 1){
+      s.rung++; s.clean = 0; s.tries = 0;
+      toast(`Lesson up a level: ${L.stages[s.rung].name}`, 'good');
+    }else{
+      s.mastered = true;
+      toast(`Lesson mastered: ${L.title}`, 'good');
+    }
+  }else if(s.tries >= RUNG_MIN_TRIES && (s.clean / s.tries) < RUNG_FLOOR && s.rung > 0){
+    s.rung--; s.clean = 0; s.tries = 0;
+    toast('Dropping back a level — this one needs more reps.', '');
+  }
+
+  // When the lesson comes back. Mastered lessons go into slow maintenance
+  // rather than disappearing, because the pattern still has to stay sharp.
+  s.reps++;
+  if(solvedClean){
+    s.interval = s.mastered ? Math.min(45, Math.max(14, (s.interval||7)*2))
+                            : (s.reps <= 1 ? 1 : Math.min(14, Math.round((s.interval||1)*2)));
+  }else{
+    s.lapses++;
+    s.interval = 1;
+  }
+  s.due = today() + s.interval;
+  save();
+}
+
+/* Fresh cards from a lesson: never one you have already solved. */
+function freshFromLesson(L, n){
+  const out = [];
+  const start = lessonSrs(L.id).rung;
+  // current rung first, then spill into the next one if this rung is used up
+  for(let i = start; i < L.stages.length && out.length < n; i++){
+    for(const c of L.stages[i].cardObjs){
+      if(out.length >= n) break;
+      if(cardState(c.id) === 'new') out.push(c);
+    }
+  }
+  // every position in the pool has been solved -- fall back to the ones due
+  // for review, oldest first
+  if(out.length < n){
+    const due = L.stages.flatMap(st => st.cardObjs)
+      .filter(c => cardState(c.id) === 'due')
+      .sort((a, b) => srs(a.id).due - srs(b.id).due);
+    for(const c of due){ if(out.length >= n) break; out.push(c); }
+  }
+  return out;
+}
+
+
 /* ---------------- adaptive difficulty ----------------
    Puzzles are bundled across a wide rating band and the app picks within it,
    so a bad initial guess at your level corrects itself in a few sessions
@@ -69,37 +221,62 @@ function updatePuzzleRating(card, solvedClean){
 }
 
 /* ---------------- daily tactics queue ----------------
-   Reviews first (they are the ones at risk of being forgotten), then new
-   puzzles chosen closest to your current level, spread across packs so a
-   single theme never fills the whole session. */
+   Order of claims on the budget:
+     1. positions genuinely due for review that have not retired,
+        capped at half so review can never crowd out new learning;
+     2. today's lessons -- and only TWO of them, not all six. Spreading
+        six patterns thinly across six puzzles a day is how you end up
+        vaguely familiar with everything and good at nothing; deliberate
+        practice wants concentration;
+     3. whatever else is unseen, nearest your level, if there is room.       */
+
+function allTacticCards(){ return PUZZLES.concat(LESSON_CARDS); }
+
+// How many lessons to work in one sitting.
+const LESSON_FOCUS = 2;
+
 function buildTacticsQueue(budget){
-  if(budget<=0 || !hasCoach()) return [];
-  const due = PUZZLES.filter(c=>cardState(c.id)==='due')
-                     .sort((a,b)=>srs(a.id).due-srs(b.id).due);
-  const out = due.slice(0,budget);
-  let room = budget-out.length;
-  if(room<=0) return out;
+  if(budget <= 0 || (!hasCoach() && !hasLessons())) return [];
+  const out = [];
+  const seen = new Set();
+  const add = c => { if(!seen.has(c.id)){ seen.add(c.id); out.push(c); } };
 
-  const mine = puzzleRating();
-  const fresh = PUZZLES.filter(c=>cardState(c.id)==='new');
-  // Your own mistakes come first -- they are the highest-signal material and
-  // there are only ever a few dozen of them.
-  const own = fresh.filter(c=>c.meta.source!=='lichess');
-  const rest = fresh.filter(c=>c.meta.source==='lichess')
-                    .sort((a,b)=>Math.abs((a.meta.rating||mine)-mine)
-                                -Math.abs((b.meta.rating||mine)-mine));
-  const pool = own.concat(rest);
+  // 1. due reviews (retired cards are not 'due', so they never appear)
+  const due = allTacticCards().filter(c => cardState(c.id) === 'due')
+                              .sort((a, b) => srs(a.id).due - srs(b.id).due);
+  due.slice(0, Math.ceil(budget / 2)).forEach(add);
 
-  // round-robin across packs so one theme can't monopolise the session
-  const byPack = {};
-  for(const c of pool){ (byPack[c.packId]=byPack[c.packId]||[]).push(c); }
-  const keys = Object.keys(byPack);
-  let i=0;
-  while(room>0 && keys.some(k=>byPack[k].length)){
-    const k = keys[i++ % keys.length];
-    if(byPack[k].length){ out.push(byPack[k].shift()); room--; }
+  // 2. today's lessons
+  const active = LESSONS
+    .filter(L => lessonState(L.id) !== 'learning' && !allRungsExhausted(L))
+    .sort((a, b) => lessonPriority(b) - lessonPriority(a))
+    .slice(0, LESSON_FOCUS);
+  if(active.length){
+    const share = Math.max(1, Math.floor((budget - out.length) / active.length));
+    for(const L of active) freshFromLesson(L, share).forEach(add);
   }
-  return out;
+
+  // 3. top up from the packs built out of your own games
+  if(out.length < budget){
+    const mine = puzzleRating();
+    PUZZLES.filter(c => cardState(c.id) === 'new')
+      .sort((a, b) => Math.abs((a.meta.rating || mine) - mine)
+                    - Math.abs((b.meta.rating || mine) - mine))
+      .slice(0, budget - out.length).forEach(add);
+  }
+  return out.slice(0, budget);
+}
+
+function allRungsExhausted(L){
+  return L.stages.every(st => st.cardObjs.every(c => {
+    const s = cardState(c.id);
+    return s !== 'new' && s !== 'due';
+  }));
+}
+
+function lessonsDue(){
+  return LESSONS.filter(L => lessonState(L.id) !== 'learning'
+                          && !allRungsExhausted(L)).length;
 }
 
 function tacticsDue(){ return PUZZLES.filter(c=>cardState(c.id)==='due').length; }
@@ -117,6 +294,17 @@ function lossPhrase(cp){
   return `it cost you about ${(cp/100).toFixed(1)} pawns`;
 }
 
+// Evals are clamped at +/-10 pawns before differencing, so every really bad
+// move comes out at exactly "20.0" -- printing that three times in a row looks
+// broken and says nothing. Say what happened instead.
+function costLabel(cp){
+  if(cp == null) return '';
+  if(cp >= 1500) return 'lost the game';
+  if(cp >= 900)  return 'winning → losing';
+  if(cp >= 400)  return `−${Math.round(cp/100)} pawns`;
+  return `−${(cp/100).toFixed(1)}`;
+}
+
 function puzzlePrompt(card){
   const m = card.meta||{};
   switch(m.kind){
@@ -125,6 +313,7 @@ function puzzlePrompt(card){
     case 'refute': return `You just played ${m.played}. Now play your opponent's side and show why it loses.`;
     case 'calc':   return `Calculate the whole line before you move — the board will not update.`;
     case 'endgame':return `Find the winning technique.`;
+    case 'lesson': return `Find the best move.`;
     default:       return `Find the best move.`;
   }
 }
@@ -347,5 +536,109 @@ function renderPack(packId){
       <div class="cl-moves">${puzzleSubtitle(card)}</div>`;
     row.addEventListener('click',()=>beginSession([card],'line',false));
     wrap.appendChild(row);
+  });
+}
+
+
+/* =====================================================================
+   LESSON VIEWS
+   ===================================================================== */
+
+function renderLessonsSection(host){
+  if(!hasLessons()) return;
+  const wrap = document.createElement('div');
+  const dueN = lessonsDue();
+  wrap.innerHTML = `<h2 class="section-title">Your lessons
+    <span class="muted" style="font-weight:400;font-size:.78rem;text-transform:none;
+      letter-spacing:0">${dueN ? dueN + ' to work on today' : 'all caught up'}</span></h2>
+    <p class="coach-note" style="margin:-4px 0 14px">What your mistakes have in common,
+      and the habit that fixes each one. Two lessons a day, with new positions every
+      time — not the same blunder on repeat.</p>`;
+  const grid = document.createElement('div');
+  grid.className = 'course-grid';
+  for(const L of LESSONS.slice().sort((a,b)=>lessonPriority(b)-lessonPriority(a))){
+    const p = lessonProgress(L);
+    const st = lessonState(L.id);
+    const stage = lessonStage(L);
+    const card = document.createElement('div');
+    card.className = 'course-card lesson-card' + (p.mastered ? ' mastered' : '');
+    card.innerHTML = `
+      <div class="cc-top">
+        <span class="tag lesson">◈ lesson</span>
+        ${p.mastered ? `<span class="due-pill none">✓ mastered</span>`
+          : st === 'learning' ? `<span class="due-pill none">resting</span>`
+          : `<span class="due-pill">${st === 'new' ? 'start' : 'due'}</span>`}
+      </div>
+      <h3>${L.title}</h3>
+      <div class="cc-bar"><div style="width:${p.pct}%"></div></div>
+      <div class="cc-meta">
+        <span>${stage.name}</span>
+        <span>${p.clean}/${p.target}</span>
+      </div>`;
+    card.addEventListener('click', () => go('lesson', L.id));
+    grid.appendChild(card);
+  }
+  wrap.appendChild(grid);
+  const badges = host.querySelector('.badge-row');
+  if(badges) host.insertBefore(wrap, badges); else host.appendChild(wrap);
+}
+
+function renderLesson(id){
+  const L = LESSON_BY_ID[id];
+  if(!L) return go('home');
+  app.appendChild(tpl('tpl-lesson'));
+  const p = lessonProgress(L);
+  const ev = L.evidence || {};
+
+  $('#lsTitle').textContent = L.title;
+  $('#lsDiag').textContent = L.diagnosis || '';
+
+  $('#lsBody').innerHTML = `
+    <div class="ls-block ls-principle">
+      <span class="ls-lab">The idea</span>
+      <p>${L.principle}</p>
+    </div>
+    <div class="ls-block ls-habit">
+      <span class="ls-lab">At the board, ask yourself</span>
+      <p>${L.habit}</p>
+    </div>
+    ${L.note ? `<p class="coach-note">${L.note}</p>` : ''}
+
+    <h3 class="coach-h">The evidence</h3>
+    <p class="coach-note">${ev.count || 0} mistakes across your games,
+      ${ev.share || 0}% of everything you lost to serious errors.
+      ${ev.newlyExplained != null && ev.newlyExplained < ev.count
+        ? `${ev.newlyExplained} of them are not explained by any other lesson.` : ''}</p>
+    <div class="ls-examples">
+      ${(ev.examples || []).map(x => `
+        <a class="ls-ex" href="${x.url}" target="_blank" rel="noopener">
+          <span class="ls-ex-txt"><b>move ${x.moveNumber}</b> you played <code>${x.played}</code>, best was <code>${x.best}</code></span>
+          <span class="ls-cost">${costLabel(x.cpLoss)}</span>
+        </a>`).join('')}
+    </div>
+
+    <h3 class="coach-h">The ladder</h3>
+    <p class="coach-note">You work at one level until you can do it, then move up.
+      Positions come from a pool, so a repeat visit is new material.</p>
+    <div class="ls-ladder">
+      ${L.stages.map((st, i) => {
+        const done = st.cardObjs.filter(c => cardState(c.id) !== 'new').length;
+        const cls = i < p.rung ? 'done' : i === p.rung ? 'current' : 'locked';
+        return `<div class="ls-rung ${cls}">
+          <span class="ls-rung-n">${i < p.rung ? '✓' : i + 1}</span>
+          <span class="ls-rung-name">${st.name}
+            <small>${st.retires ? 'from your own games — retires once solved'
+                                : `${done}/${st.cardObjs.length} of the pool seen`}</small></span>
+          ${i === p.rung ? `<span class="ls-rung-prog">${p.clean}/${p.target}</span>` : ''}
+        </div>`;
+      }).join('')}
+    </div>`;
+
+  const drill = $('#lsDrill');
+  drill.textContent = p.mastered ? '↻ Keep it sharp' : '▶ Practise this lesson';
+  drill.addEventListener('click', () => {
+    const q = freshFromLesson(L, 6);
+    if(!q.length){ toast('You have solved this whole pool — it will come back later.', ''); return; }
+    beginSession(q, 'lesson', false);
   });
 }

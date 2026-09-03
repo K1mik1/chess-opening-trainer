@@ -41,7 +41,7 @@
     <button id="startBtn" class="big-btn">▶ Start today's training</button>
     <div id="dueSummary" class="due-summary"></div>
 
-    <h2 class="section-title">Your openings</h2>
+    <h2 class="section-title">Your repertoire</h2>
     <div id="courseGrid" class="course-grid"></div>
 
     <div id="badgeRow" class="badge-row"></div>
@@ -87,6 +87,20 @@
     </div>
     <h2 class="section-title">Variations</h2>
     <div id="cdLines" class="cd-lines"></div>
+  </section>
+</template>
+
+<!-- ====== LESSON TEMPLATE ====== -->
+<template id="tpl-lesson">
+  <section class="view lesson-detail">
+    <button class="back" data-nav="home">‹ Back</button>
+    <span class="ls-kicker">Lesson</span>
+    <h1 id="lsTitle"></h1>
+    <p id="lsDiag" class="ls-diag"></p>
+    <div class="cd-actions">
+      <button id="lsDrill" class="big-btn small">▶ Practise this lesson</button>
+    </div>
+    <div id="lsBody"></div>
   </section>
 </template>
 

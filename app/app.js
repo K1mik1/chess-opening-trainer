@@ -35,7 +35,8 @@ const DEFAULTS = () => ({
   profile:{xp:0, streak:0, bestStreak:0, lastDay:null, totalMoves:0,
            sessionsDone:0, perfectSessions:0,
            puzzleRating:null, puzzlesDone:0, puzzlesSolved:0},
-  cards:{},                 // cardId -> {seen,ease,interval,due,reps,lapses,lastGrade}
+  cards:{},                 // cardId -> {seen,ease,interval,due,reps,lapses,lastGrade,clean}
+  lessons:{},               // lessonId -> {rung,clean,tries,interval,due,mastered}
   badges:{},
   settings:{muted:false, newPerDay:4, maxSession:14, theme:'green', tacticsPerDay:6},
   lastSummary:null,
@@ -44,7 +45,8 @@ let state = load();
 function load(){
   try{ const s=JSON.parse(localStorage.getItem(SKEY)); if(s&&s.v===1){
         const d=DEFAULTS(); return {...d,...s, profile:{...d.profile,...s.profile},
-          settings:{...d.settings,...s.settings}, cards:s.cards||{}, badges:s.badges||{}}; }
+          settings:{...d.settings,...s.settings}, cards:s.cards||{},
+          lessons:s.lessons||{}, badges:s.badges||{}}; }
   }catch(e){}
   return DEFAULTS();
 }
@@ -75,7 +77,8 @@ function importProgress(){
     // Route through the same normalisation load() uses, so older backups still work.
     const d=DEFAULTS();
     state={...d,...s, profile:{...d.profile,...s.profile},
-           settings:{...d.settings,...s.settings}, cards:s.cards||{}, badges:s.badges||{}};
+           settings:{...d.settings,...s.settings}, cards:s.cards||{},
+           lessons:s.lessons||{}, badges:s.badges||{}};
     save(); applyTheme(state.settings.theme); refreshTopbar(); go('home');
     toast(`Restored ${state.profile.xp} XP, ${Object.keys(state.cards).length} cards.`,'');
   };
@@ -107,9 +110,23 @@ const courseById = id => COURSES.find(c=>c.id===id);
 
 /* ---------------- spaced repetition (SM-2 lite) ---------------- */
 function srs(id){ return state.cards[id]; }
+
+/* A tactic can retire; an opening line never does.
+   Positions taken from your own games carry meta.maxReps from the build. Once
+   you have solved one that many times cleanly it stops coming back: at that
+   point you remember the board rather than the pattern, and the pattern is
+   what the lessons drill. The card stays browsable in its pack -- it just
+   leaves the review rotation. */
+function cardCap(id){
+  const c = (typeof PUZZLE_BY_ID!=='undefined' && PUZZLE_BY_ID[id])
+         || (typeof LESSON_CARD_BY_ID!=='undefined' && LESSON_CARD_BY_ID[id]);
+  return (c && c.meta && c.meta.maxReps) || 0;
+}
 function cardState(id){
   const s=srs(id);
   if(!s||!s.seen) return 'new';
+  const cap=cardCap(id);
+  if(cap && (s.clean||0)>=cap) return 'retired';
   if(s.due<=today()) return 'due';
   return s.interval>=MATURE ? 'mature' : 'learning';
 }
@@ -126,6 +143,8 @@ function schedule(id, grade){
                   s.interval = s.reps===1?2 : Math.round((s.interval||1)*s.ease*1.3); break;
   }
   s.interval=Math.min(s.interval,365);
+  // clean = consecutive solves with no slip; drives retirement (see cardState)
+  if(grade==='good'||grade==='easy') s.clean=(s.clean||0)+1; else s.clean=0;
   s.seen=true; s.due=t+s.interval; s.lastGrade=grade;
   state.cards[id]=s; return s;
 }
@@ -168,7 +187,12 @@ function stars(pct){ return pct>=90?3 : pct>=60?2 : pct>=25?1 : 0; }
 // Openings and puzzles share one review schedule, so the daily load is
 // balanced across both -- otherwise a pile-up of puzzles would quietly blow
 // past the "10 minutes a day" the whole app is built around.
-function allCards(){ return typeof PUZZLES!=='undefined' ? CARDS.concat(PUZZLES) : CARDS; }
+function allCards(){
+  let out=CARDS;
+  if(typeof PUZZLES!=='undefined') out=out.concat(PUZZLES);
+  if(typeof LESSON_CARDS!=='undefined') out=out.concat(LESSON_CARDS);
+  return out;
+}
 
 function rebalanceBacklog(){
   const t=today();
@@ -176,6 +200,7 @@ function rebalanceBacklog(){
   const overdue=[];
   const load={};            // absolute day index -> count of on-time/future reviews
   for(const c of allCards()){ const s=srs(c.id); if(!s||!s.seen) continue;
+    if(cardState(c.id)==='retired') continue;
     if(s.due<t) overdue.push(c.id);
     else load[s.due]=(load[s.due]||0)+1;
   }
@@ -239,6 +264,7 @@ function go(view, arg){
   // than throwing if someone reaches these without a build.
   else if(view==='pack')  { if(typeof renderPack==='function')  renderPack(arg); else return go('home'); }
   else if(view==='coach') { if(typeof renderCoach==='function') renderCoach();   else return go('home'); }
+  else if(view==='lesson'){ if(typeof renderLesson==='function') renderLesson(arg); else return go('home'); }
   document.body.dataset.view=view;
 }
 document.addEventListener('click', e=>{
@@ -284,13 +310,18 @@ function renderHome(){
 
   $('#startBtn').addEventListener('click', startDaily);
 
-  // course cards, grouped by difficulty tier (the learning curve)
-  const TIER_LABEL={1:'Beginner — start here',2:'Intermediate',3:'Advanced'};
+  /* Course cards. COURSES arrives from the build already sorted by weight --
+     how much of your practice each opening has earned, computed from how
+     often you actually reach it and how you score there (build/priority.py).
+     So "next up" and the order on screen both follow the data rather than a
+     fixed curriculum. Within that, we group by ROLE: the openings you chose
+     to play, then the antidotes for what opponents do to you. */
   const host=$('#courseGrid');
   host.classList.remove('course-grid');           // becomes a plain container
   const buildCard=c=>{
     const pr=courseProgress(c.id);
     const card=document.createElement('div'); card.className='course-card';
+    const why = c.why && c.why!=='no analysis yet' ? c.why : '';
     card.innerHTML=`
       <div class="cc-top">
         <span class="tag ${c.color}">${c.color==='white'?'▲ White':'▼ Black'}</span>
@@ -299,21 +330,35 @@ function renderHome(){
       <h3>${c.name}</h3>
       <div class="cc-bar"><div style="width:${pr.pct}%"></div></div>
       <div class="cc-meta"><span class="stars">${'★'.repeat(stars(pr.pct))}${'☆'.repeat(3-stars(pr.pct))}</span>
-        <span>${pr.mature}/${pr.total} mastered</span></div>`;
+        <span>${pr.mature}/${pr.total} mastered</span></div>
+      ${why?`<div class="cc-why">${why}</div>`:''}`;
     card.addEventListener('click',()=>go('course',c.id));
     return card;
   };
-  const tiers=[...new Set(COURSES.map(c=>c.tier||1))].sort((a,b)=>a-b);
-  for(const t of tiers){
+  const ROLES=[
+    {id:'core',     label:'Your openings',
+     note:'Ordered by how much of your practice each one has earned.'},
+    {id:'antidote', label:'What your opponents actually do',
+     note:'Built from your own games: the lines you keep meeting that your '+
+          'repertoire had no answer for.'},
+  ];
+  for(const r of ROLES){
+    const list=COURSES.filter(c=>(c.role||'core')===r.id);
+    if(!list.length) continue;
     const group=document.createElement('div'); group.className='tier-group';
-    group.innerHTML=`<div class="tier-head"><span class="tier-chip t${t}">${TIER_LABEL[t]||('Tier '+t)}</span></div>`;
+    group.innerHTML=`<div class="tier-head">
+      <span class="tier-chip t${r.id==='core'?1:2}">${r.label}</span>
+      <small class="tier-note">${r.note}</small></div>`;
     const grid=document.createElement('div'); grid.className='course-grid';
-    for(const c of COURSES.filter(x=>(x.tier||1)===t)) grid.appendChild(buildCard(c));
+    for(const c of list) grid.appendChild(buildCard(c));
     group.appendChild(grid); host.appendChild(group);
   }
-  // tactics / weakness packs, if a coach build is present
+  // lessons first (the diagnosis), then the raw packs they came from
   if(typeof renderTacticsSection==='function'){
     renderTacticsSection(app.querySelector('.home'));
+  }
+  if(typeof renderLessonsSection==='function'){
+    renderLessonsSection(app.querySelector('.home'));
   }
 
   renderBadges($('#badgeRow'));
@@ -620,6 +665,11 @@ function finishCard(){
       const clean = mistakes===0;
       updatePuzzleRating(play.card, clean);
       if(clean) state.profile.puzzlesSolved=(state.profile.puzzlesSolved||0)+1;
+      // A lesson card also scores the LESSON, which is what decides whether
+      // you move up a rung and when the pattern comes back.
+      if(play.card.isLesson && typeof creditLesson==='function'){
+        creditLesson(play.card, clean);
+      }
       const url=play.card.meta && play.card.meta.gameUrl;
       if(url && play.card.meta.kind!=='theme'){
         const ml=$('#moveList');
