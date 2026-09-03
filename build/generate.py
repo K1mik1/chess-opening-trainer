@@ -28,6 +28,9 @@ import sys
 
 import chess
 
+import conf
+import priority
+import verify_engine
 from repertoire import REPERTOIRE
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -101,8 +104,17 @@ def make_node(board, name):
     }
 
 
-def build_course(course, book_epds, name_by_epd):
+def build_course(course, book_epds, name_by_epd, verifier=None):
+    """Replay every line, verify it, and merge into one move-tree.
+
+    Two verification modes. The default is ECO: every position must occur in
+    the Lichess opening database. A course may instead set
+    `"verify": "engine"`, which checks the USER's moves against Stockfish and
+    lets the OPPONENT play anything legal -- see verify_engine.py for why the
+    junk-opening courses need that.
+    """
     color = chess.WHITE if course["color"] == "white" else chess.BLACK
+    mode = course.get("verify", "eco")
 
     root = make_node(chess.Board(), "Starting position")
     errors = []
@@ -137,16 +149,35 @@ def build_course(course, book_epds, name_by_epd):
                 else:                                        # queen side
                     rook = {"from": "a" + rank, "to": "d" + rank}
 
-            board.push(move)
-            played.append(san)
-
-            # ---- book check (by position, so transpositions count) ----
-            if board.epd() not in book_epds:
-                errors.append(f"  NOT IN BOOK: {' '.join(played)}  "
-                              f"(move '{san}' leaves known theory)")
-                break
-
             mine = (mover_is_white == (color == chess.WHITE))
+
+            # ---- verification, before the move is pushed ----
+            if mode == "engine":
+                # Only OUR moves need to be sound. The opponent's move is the
+                # bad move we are learning to meet.
+                if mine:
+                    ok, detail = verifier.check(board, move)
+                    if ok is None:
+                        errors.append(
+                            f"  UNVERIFIED: {' '.join(played + [san])}  "
+                            f"(no cached verdict and no engine available)")
+                        break
+                    if not ok:
+                        errors.append(
+                            f"  UNSOUND: {' '.join(played + [san])}  "
+                            f"('{san}' loses {detail['loss']}cp vs "
+                            f"'{detail['best']}' at depth {detail['depth']})")
+                        break
+                board.push(move)
+            else:
+                board.push(move)
+                # book check by position, so transpositions count
+                if board.epd() not in book_epds:
+                    errors.append(f"  NOT IN BOOK: {' '.join(played + [san])}  "
+                                  f"(move '{san}' leaves known theory)")
+                    break
+
+            played.append(san)
             name = name_by_epd.get(board.epd()) or node["name"]
 
             edge = node["children"].get(san)
@@ -216,15 +247,40 @@ def finalize(node):
 # ----------------------------------------------------------------------------
 
 def main():
+    argv = sys.argv[1:]
+    reverify = "--reverify" in argv
+    no_engine = "--no-engine" in argv
+
     book_epds, name_by_epd = load_eco()
     print(f"Loaded ECO database: {len(name_by_epd)} named positions, "
-          f"{len(book_epds)} book positions.\n")
+          f"{len(book_epds)} book positions.")
+
+    engine_path = None
+    if not no_engine:
+        try:
+            from analyze_games import find_engine
+            engine_path = find_engine(conf.load().get("engine", {}).get("path"))
+        except Exception:
+            engine_path = None
+    verifier = verify_engine.Verifier(engine_path=engine_path,
+                                      allow_engine=not no_engine)
+    if reverify:
+        verifier.cache = {}
+        verifier.dirty = True
+    n_cached = len(verifier.cache)
+    print(f"Engine verdict cache: {n_cached} moves"
+          + (f" · Stockfish at {engine_path}" if engine_path else " · no engine")
+          + "\n")
+
+    # Course weights are what the daily scheduler leans on, and they are
+    # recomputed from the user's real games on every refresh.
+    weights = priority.course_weights(REPERTOIRE)
 
     courses = []
     any_error = False
 
     for course in REPERTOIRE:
-        root, errors = build_course(course, book_epds, name_by_epd)
+        root, errors = build_course(course, book_epds, name_by_epd, verifier)
         if errors:
             any_error = True
             print(f"[FAIL] {course['name']}")
@@ -234,17 +290,42 @@ def main():
             continue
 
         my_moves, leaves = finalize(root)
+        w = weights.get(course["id"], {})
         courses.append({
             "id": course["id"],
             "color": course["color"],
             "tier": course.get("tier", 1),
             "name": course["name"],
             "summary": course["summary"],
+            "role": course.get("role", "core"),
+            "weight": w.get("weight", 1.0),
+            "rawWeight": w.get("raw", w.get("weight", 1.0)),
+            "why": w.get("why", ""),
             "tree": root,
             "stats": {"variations": leaves, "quizMoves": my_moves},
         })
-        print(f"[ OK ] {course['name']:<34} "
-              f"{leaves:>3} variations, {my_moves:>3} moves to learn")
+        print(f"[ OK ] {course['name']:<38} "
+              f"{leaves:>3} var {my_moves:>4} moves  "
+              f"w={w.get('weight', 1.0):.2f}  {w.get('why', '')}")
+
+    # Sort by weight so the app introduces the openings that matter most
+    # first. Pinned courses share a floor, so break their ties on the
+    # unfloored figure -- otherwise six pinned openings arrive in alphabetical
+    # order and the one you actually play most is buried among them. Tier is
+    # the last word, keeping the easy-before-hard curve where merit is equal.
+    courses.sort(key=lambda c: (-c["weight"], -c["rawWeight"],
+                                c["tier"], c["name"]))
+
+    if verifier.misses:
+        print(f"\n[FAIL] {len(verifier.misses)} engine-verified moves have no "
+              f"cached verdict and Stockfish is not available.")
+        print("       Install stockfish and re-run, or drop the engine-verified "
+              "courses.")
+        for epd, san in verifier.misses[:8]:
+            print(f"         {san}  in  {epd}")
+        any_error = True
+
+    verifier.close()
 
     if any_error:
         print("\nBuild aborted: fix the repertoire lines above. "

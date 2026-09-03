@@ -80,14 +80,22 @@ async function main() {
 
   ok(!!window.document.querySelector('.view.home'), 'home view rendered');
   // scoped to the openings grid -- the tactics packs reuse .course-card too
-  ok(window.document.querySelectorAll('#courseGrid .course-card').length === 12,
-     '12 course cards shown');
-  ok(window.document.querySelectorAll('.tier-group').length >= 2, 'courses grouped into difficulty tiers');
+  // Derived, not hardcoded: the repertoire grows whenever build/gaps.py finds
+  // an opening the user meets and cannot answer, so a fixed number here just
+  // breaks every time the coach does its job.
+  const nCourses = ev('COURSES.length');
+  ok(window.document.querySelectorAll('#courseGrid .course-card').length === nCourses,
+     `${nCourses} course cards shown`);
+  ok(window.document.querySelectorAll('.tier-group').length >= 2,
+     'courses grouped by role (your openings / antidotes)');
   ok(ev('typeof startLine') === 'function', 'app globals reachable for driving');
   // daily scheduler introduces the FIRST course (curriculum order) first
   ok(ev(`buildDailyQueue()[0].courseId`) === ev(`CARDS.find(c=>cardState(c.id)==='new').courseId`),
      'daily queue starts from the first unseen course (learning curve)');
-  ok(ev(`COURSES[0].tier`) === 1, 'first course is a Beginner-tier course');
+  // Courses arrive sorted by weight (build/priority.py), so the first one is
+  // whatever your games say matters most -- not a fixed tier.
+  ok(ev('COURSES[0].weight') >= ev('COURSES[COURSES.length-1].weight'),
+     'courses ordered by earned weight, highest first');
 
   // themes
   const swatches = window.document.querySelectorAll('.swatch');

@@ -70,7 +70,8 @@ async function solve(w, cardRef, { blindExpected = false } = {}) {
     await delay(500);
     ok(w0.eval('PUZZLES.length') === 0, 'no puzzles when exercises.js is absent');
     ok(!!w0.document.querySelector('.home'), 'app still renders the home screen');
-    ok(w0.document.querySelectorAll('#courseGrid .course-card').length === 12,
+    ok(w0.document.querySelectorAll('#courseGrid .course-card').length
+         === w0.eval('COURSES.length'),
        'opening trainer unaffected');
     ok(w0.eval('buildDailyQueue().length') > 0, 'daily session still works');
     console.log(`\n${failed ? 'FAILED' : 'PASSED'}  (${passed} passed, ${failed} failed)\n`);
@@ -145,7 +146,8 @@ async function solve(w, cardRef, { blindExpected = false } = {}) {
   await delay(500);
   ok(w2.eval('PUZZLES.length') === 0, 'no puzzles when exercises.js is absent');
   ok(!!w2.document.querySelector('.home'), 'app still renders the home screen');
-  ok(w2.document.querySelectorAll('#courseGrid .course-card').length === 12,
+  ok(w2.document.querySelectorAll('#courseGrid .course-card').length
+       === w2.eval('COURSES.length'),
      'opening trainer unaffected');
   const q2 = w2.eval('buildDailyQueue().length');
   ok(q2 > 0, `daily session still works (${q2} cards)`);
