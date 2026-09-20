@@ -8,7 +8,7 @@ const {chromium} = require('playwright');
     const context=await browser.newContext({viewport:{width:390,height:844}});
     const page=await context.newPage();
     const errors=[]; page.on('pageerror',e=>errors.push(e.message));
-    await page.goto(process.env.PUZZLE_TEST_URL || 'http://localhost:8765/',{waitUntil:'domcontentloaded'});
+    await page.goto(process.env.PUZZLE_TEST_URL || 'http://localhost:8765/?v=4',{waitUntil:'domcontentloaded'});
     const catalogue=await page.evaluate(()=>catalogueCards().map(c=>({id:c.id,pack:c.packId,rating:c.meta.rating,endsMine:c.edges.at(-1).mine})));
     assert.equal(catalogue.length,200); assert.equal(new Set(catalogue.map(c=>c.id)).size,200);
     assert(catalogue.every(c=>c.endsMine));

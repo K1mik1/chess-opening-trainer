@@ -1,4 +1,4 @@
-const CACHE = 'opening-trainer-v4';
+const CACHE = 'opening-trainer-v5';
 const ASSETS = ["./", "index.html", "style.css?v=4", "app.js?v=4", "coach.js?v=4", "public-puzzles.js?v=4", "puzzles-ui.js?v=4", "repertoire.js", "pwa.js?v=4", "manifest.webmanifest", "pieces/bB.svg", "pieces/bK.svg", "pieces/bN.svg", "pieces/bP.svg", "pieces/bQ.svg", "pieces/bR.svg", "pieces/wB.svg", "pieces/wK.svg", "pieces/wN.svg", "pieces/wP.svg", "pieces/wQ.svg", "pieces/wR.svg", "icons/apple-touch-icon.png", "icons/icon-192.png", "icons/icon-512.png"];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS.map(url => new Request(url, {cache: 'reload'})))));
@@ -22,5 +22,14 @@ self.addEventListener('fetch', event => {
       event.waitUntil(caches.open(CACHE).then(cache => cache.put(event.request, copy)));
     }
     return response;
-  }).catch(async () => (await caches.match(event.request)) || Response.error()));
+  }).catch(async () => {
+    const cached = await caches.match(event.request);
+    if(cached) return cached;
+    // Versioned entry links must reopen offline on the very first visit too.
+    if(event.request.mode === 'navigate') {
+      const shell = await caches.match(new URL('index.html', self.registration.scope).href);
+      if(shell) return shell;
+    }
+    return Response.error();
+  }));
 });
