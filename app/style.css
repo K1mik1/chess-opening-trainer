@@ -395,3 +395,14 @@ body[data-view="train"] #app{max-width:1200px;padding:12px 12px 40px}
   .train .board{border-radius:0;box-shadow:none}
   .sq .coord{font-size:.65rem;opacity:.75}
 }
+
+.puzzle-entry{margin:24px 0;padding:18px;background:var(--card);border:1px solid var(--accent);border-radius:var(--radius)}
+.puzzle-entry h2{margin:0}.puzzle-entry p{margin:8px 0 14px}
+.puzzle-filters{display:flex;flex-wrap:wrap;gap:12px;margin:20px 0 10px}
+.puzzle-filters label{flex:1;min-width:140px;font-size:.85rem}
+.puzzle-filters select{display:block;width:100%;min-height:44px;margin-top:6px;padding:8px;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:8px;font:inherit}
+.puzzle-actions{display:flex;flex-wrap:wrap;gap:10px}.puzzle-actions .big-btn{margin:0}
+.puzzle-help,.puzzle-source{font-size:.8rem;line-height:1.5}.puzzle-source a{color:var(--accent)}
+.puzzle-row{text-align:left;color:var(--ink);font:inherit;width:100%}.puzzle-row .cl-top{gap:12px}.puzzle-row .cl-top span{font-size:.75rem}.puzzle-row .cl-moves{display:block;margin-top:8px}
+.puzzle-actions button:disabled{opacity:.5;cursor:default}
+#nextPuzzle{margin:16px auto 0;display:block}

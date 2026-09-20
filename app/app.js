@@ -286,6 +286,7 @@ function clearView(){ app.innerHTML=''; }
 function go(view, arg){
   clearView();
   if(view==='home') renderHome();
+  else if(view==='puzzles') renderPuzzleCatalogue();
   else if(view==='course') renderCourse(arg);
   // Coach views live in coach.js, which is optional — fall back home rather
   // than throwing if someone reaches these without a build.
@@ -563,7 +564,7 @@ function startCard(card){
   whiteBottom = card.color==='white';
   renderBoard(start, whiteBottom);
   $('#lineName').textContent = card.isPuzzle
-    ? `${card.courseName} — ${card.name}`
+    ? (card.meta.kind==='catalogue' && session.mode!=='puzzle-practice' ? card.name : `${card.courseName} — ${card.name}`)
     : `${card.courseName} — ${shortName(card.name,card.courseName)}`;
   $('#moveList').innerHTML='';
   const sub=$('#lineSub');
@@ -575,8 +576,12 @@ function startCard(card){
     $('#planIdea').textContent=plan.idea;
     $('#planAvoid').textContent=plan.avoid;
     const source=$('#planSource'); if(source) source.href=plan.source;
-    planCard.hidden=false;
+    planCard.hidden=!!card.isPuzzle;
+    if(!card.isPuzzle && source) source.textContent='Fonte teorica ↗';
   }
+  $('#hintBtn').textContent=card.meta?.kind==='catalogue'?'💡 Aiuto':'💡 Hint';
+  $('#revealBtn').textContent=card.meta?.kind==='catalogue'?'Mostra la mossa':'I forgot — show me';
+  $('.plan-kicker').textContent=card.meta?.kind==='catalogue'?'SOLUZIONE':'PIANO DELLA POSIZIONE';
   updateSessBar();
   $('#hintBtn').disabled=$('#revealBtn').disabled=false;
   document.body.classList.toggle('blind-mode', !!play.blind);
@@ -676,15 +681,16 @@ function onHint(){
   if(!play||!play.awaiting||session.learn) return;
   const edge=play.edges[play.step];
   highlightHint(edge.from, null);
-  if(!play.hintThisMove){ play.hintThisMove=true; }
+  if(!play.hintThisMove){ play.hintThisMove=true; play.hintMoves++; }
   setPrompt('Hint: move the highlighted piece.', '');
 }
 function onReveal(){
   if(!play||!play.awaiting||engineBusy||session.learn) return;
   const edge=play.edges[play.step];
-  play.hintThisMove=true; play.hintMoves++;
+  if(!play.hintThisMove) play.hintMoves++;
+  play.hintThisMove=true;
   highlightHint(edge.from, edge.to);
-  setPrompt(`The book move is ${edge.san}.`, '');
+  setPrompt(play.card.isPuzzle ? `La soluzione è ${edge.san}.` : `The book move is ${edge.san}.`, '');
   play.awaiting=false; selected=null; clearSel();
   engineBusy=true;
   setTimeout(()=>playEdge(edge, ()=>{
@@ -712,6 +718,7 @@ function finishCard(){
   }
   if(grade){
     schedule(play.card.id, grade);
+    if(play.card.meta?.kind==='catalogue') srs(play.card.id).needsReview=mistakes>0;
     session.results.push({id:play.card.id, grade, mistakes});
     // Puzzles rate you as much as you rate them: a clean solve nudges your
     // puzzle rating up, so the app keeps serving material at the right level
@@ -726,7 +733,7 @@ function finishCard(){
         creditLesson(play.card, clean);
       }
       const url=play.card.meta && play.card.meta.gameUrl;
-      if(url && play.card.meta.kind!=='theme'){
+      if(url && !['theme','catalogue'].includes(play.card.meta.kind)){
         const ml=$('#moveList');
         if(ml){ const a=document.createElement('a');
           a.href=url; a.target='_blank'; a.rel='noopener';
@@ -745,10 +752,16 @@ function finishCard(){
     creditStudyDay(); refreshTopbar(); checkBadges();
   }
   save();
-  session.idx++;
-  if(session.idx>=session.queue.length) return finishSession();
-  setTimeout(()=>startCard(session.queue[session.idx]), 500);
-  updateSessBar();
+  const finishedSession=session;
+  const advance = () => {
+    if(!viewAlive() || session!==finishedSession) return;
+    session.idx++;
+    if(session.idx>=session.queue.length) return finishSession();
+    startCard(session.queue[session.idx]);
+    updateSessBar();
+  };
+  if(play.card.meta?.kind==='catalogue') return showPuzzleResult(play.card, mistakes, advance);
+  setTimeout(advance, 500);
 }
 
 // Advance the daily streak the moment you review your first line today — you

@@ -15,7 +15,7 @@
 'use strict';
 
 const EXDATA = window.EXERCISES || null;
-const PACKS = EXDATA ? EXDATA.packs : [];
+const PACKS = [...(EXDATA ? EXDATA.packs : []), ...(window.PUBLIC_PUZZLES?.packs || [])];
 const COACH_PROFILE = EXDATA ? EXDATA.profile : null;
 
 /* ---------------- puzzle cards ---------------- */
@@ -308,6 +308,7 @@ function costLabel(cp){
 function puzzlePrompt(card){
   const m = card.meta||{};
   switch(m.kind){
+    case 'catalogue': return `Muove il ${card.color==='white'?'Bianco':'Nero'}. Trova la mossa migliore.`;
     case 'own':    return `You played ${m.played} here and ${lossPhrase(m.cpLoss)}. Find the move you missed.`;
     case 'punish': return `Your opponent just played ${m.oppMove}. Punish it.`;
     case 'refute': return `You just played ${m.played}. Now play your opponent's side and show why it loses.`;
@@ -319,6 +320,7 @@ function puzzlePrompt(card){
 }
 function puzzleSubtitle(card){
   const m = card.meta||{};
+  if(m.kind==='catalogue') return `${catalogueLevelName(m.rating)} · Difficoltà ${m.rating} · Muove il ${card.color==='white'?'Bianco':'Nero'}`;
   const bits = [];
   if(m.rating) bits.push(`rated ${m.rating}`);
   if(m.moveNumber) bits.push(`move ${m.moveNumber}`);
@@ -455,13 +457,14 @@ function acplVerdict(a){
 
 /* ---------------- home-screen section ---------------- */
 function renderTacticsSection(host){
-  if(!hasCoach()) return;
+  renderPuzzleEntry(host);
+  if(!PACKS.some(p => p.kind !== 'catalogue')) return;
   const wrap = document.createElement('div');
   wrap.innerHTML = `<h2 class="section-title">Your weaknesses
     <button id="coachBtn" class="link-btn">see the full report ›</button></h2>`;
   const grid = document.createElement('div');
   grid.className = 'course-grid';
-  for(const pack of PACKS){
+  for(const pack of PACKS.filter(p => p.kind !== 'catalogue')){
     const list = PUZZLES_BY_PACK[pack.id];
     if(!list.length) continue;
     const done = list.filter(c=>cardState(c.id)!=='new').length;
