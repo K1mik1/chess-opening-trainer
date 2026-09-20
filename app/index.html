@@ -2,8 +2,13 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Opening Trainer</title>
+<meta name="theme-color" content="#262019">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Scacchi">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -65,6 +70,19 @@
     <div class="train-info">
       <div class="line-name" id="lineName">—</div>
       <div class="line-sub" id="lineSub"></div>
+      <div id="planCard" class="plan-card" hidden>
+        <div class="plan-kicker">PIANO DELLA POSIZIONE</div>
+        <div id="planGoal" class="plan-goal"></div>
+        <p id="planText"></p>
+        <div class="plan-grid"><div><span>IDEA</span><b id="planIdea"></b></div><div><span>EVITA</span><b id="planAvoid"></b></div></div>
+        <a id="planSource" class="plan-source" target="_blank" rel="noopener">Fonte teorica ↗</a>
+      </div>
+      <div id="conceptPanel" class="concept-panel" hidden>
+        <div class="concept-kicker">PRIMA DI GIOCARE</div>
+        <div id="conceptQuestion" class="concept-question"></div>
+        <div id="conceptOptions" class="concept-options"></div>
+        <div id="conceptFeedback" class="concept-feedback"></div>
+      </div>
       <div class="turn-prompt" id="turnPrompt"></div>
       <div class="moves" id="moveList"></div>
       <div class="train-actions">
@@ -141,5 +159,6 @@
 <script src="exercises.js"></script>
 <script src="coach.js"></script>
 <script src="app.js"></script>
+<script src="pwa.js"></script>
 </body>
 </html>

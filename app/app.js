@@ -8,6 +8,33 @@
 
 const STARTFEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 const GLYPHS = {k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'};
+/* Short strategic layer: the move tree tells us what is played; this tells us
+   what the player is trying to achieve. It is deliberately separate from the
+   generated repertoire so explanations can evolve without rebuilding theory. */
+const PLANS = {
+  italian: {goal:'Sviluppa e scegli la rottura centrale', text:'Dopo 1.e4 e5 2.Nf3 Nc6 3.Bc4, completa lo sviluppo e metti il re al sicuro. Se giochi c3, la rottura d4 apre il centro; con d3 mantieni una struttura più chiusa e prepari manovre pazienti.', idea:'Arrocco, c3–d4 oppure d3–c3–Nbd2', avoid:'Attaccare f7 senza sviluppo', source:'https://www.chess.com/openings/Italian-Game'},
+  scotch: {goal:'Apri il centro prima del Nero', text:'Il cambio in d4 libera linee e ti dà sviluppo rapido. Usa il vantaggio di tempo per completare lo sviluppo e arroccare.', idea:'Sviluppo con tempo e pressione su e5', avoid:'Inseguire pedoni invece di sviluppare'},
+  ruy_lopez: {goal:'Pressione su e5 e centro flessibile', text:'Metti pressione sul difensore di e5, arrocca e scegli il momento giusto per c3–d4.', idea:'Alfiere b5, arrocco, d4', avoid:'Salvare l’alfiere senza motivo'},
+  petrov: {goal:'Pareggia con sviluppo armonioso', text:'Colpisci il centro bianco senza uscire troppo presto con la donna. Sviluppa, arrocca e prepara ...d5.', idea:'...d5 e pezzi attivi', avoid:'Difendere e5 passivamente'},
+  caro_kann: {goal:'Struttura solida e alfiere buono', text:'Sostieni il centro con ...c6, sviluppa l’alfiere fuori dalla catena pedonale e cerca ...d5 o ...c5.', idea:'Alfiere c8 attivo prima di ...e6', avoid:'Chiudere l’alfiere con mosse automatiche'},
+  london: {goal:'Costruisci una posizione solida', text:'Sviluppa il sistema senza giocare mosse a memoria: arrocca, controlla e4 e scegli il momento per c4 o e4.', idea:'Alfiere f4, Nf3, arrocco', avoid:'Giocare c3 senza guardare il centro'},
+  french_advance: {goal:'Attacca la catena centrale', text:'La catena punta verso il lato di re: gioca sul lato di donna e prepara ...c5 per colpire d4.', idea:'...c5 contro la base d4', avoid:'Attaccare la punta e5 senza piano'},
+  queens_gambit: {goal:'Controlla il centro senza perdere tempi', text:'Sviluppa i pezzi, sostieni il centro e decidi se mantenere o restituire il pedone in base alla posizione.', idea:'Sviluppo e pressione su d5', avoid:'Difendere il pedone a ogni costo'},
+};
+const CONCEPT_LESSON = [
+  {q:'Perché il Bianco gioca 1.e4?', options:['Controlla il centro e apre le diagonali per alfiere e donna.','Attacca subito la torre a8.','Evita di sviluppare i pezzi.'], correct:0, explain:'e4 controlla d5 e f5 e libera l’alfiere c1 e la donna.'},
+  {q:'Dopo 1.e4 e5 2.Nf3, qual è il motivo principale?', options:['Attaccare e5, sviluppare un pezzo e preparare l’arrocco.','Portare subito la donna fuori.','Chiudere tutte le diagonali.'], correct:0, explain:'La stessa mossa svolge tre lavori: pressione su e5, sviluppo e preparazione dell’arrocco.'},
+  {q:'Dopo 3.Bc4 Bc5, quale scelta descrive il piano del Giuoco Pianissimo?', options:['d3: centro più chiuso, sviluppo e manovra prima della rottura.','h4: attacco immediato senza sviluppo.','a3: inseguire il cavallo prima di arroccare.'], correct:0, explain:'Con d3 il Bianco mantiene il centro e prepara sviluppo, arrocco e una rottura solo quando è pronta.'},
+];
+function planFor(card){
+  const base=PLANS[card.courseId] || {goal:'Sviluppa e cerca il piano della posizione', text:'Chiediti quali pezzi sono ancora fuori gioco, quale rottura centrale è possibile e dove vuoi migliorare il pezzo peggiore.', idea:'Sviluppo, re al sicuro, rottura centrale', avoid:'Muovere senza una minaccia o un obiettivo', source:'https://www.chess.com/article/view/giuoco-piano-chess-opening'};
+  if(card.courseId==='italian'){
+    const moves=(card.edges||[]).map(e=>e.san);
+    if(moves.includes('b4')) return {goal:'Sacrifica un pedone per guadagnare tempi',text:'Nel Gambetto Evans il pedone b4 serve ad allontanare l’alfiere nero. Usa i tempi guadagnati per sviluppare e attaccare prima che il Nero arrochi.',idea:'Sviluppo rapido e pressione sul re',avoid:'Recuperare il pedone prima di sviluppare',source:'https://www.chess.com/openings/Italian-Game'};
+    if(moves.includes('d3') && !moves.includes('c3')) return {goal:'Mantieni il centro e manovra',text:'Con d3 sostieni e4 e limiti gli scambi centrali. Completa lo sviluppo, arrocca e prepara Nbd2, Re1 e una rottura solo quando la posizione la sostiene.',idea:'Nbd2, Re1, arrocco',avoid:'Forzare d4 senza preparazione',source:'https://www.chess.com/openings/Italian-Game'};
+  }
+  return {...base, source:base.source||'https://www.chess.com/openings/Italian-Game'};
+}
 const MATURE = 21;            // interval (days) at which a line counts "mastered"
 const $  = (s,r=document)=>r.querySelector(s);
 const $$ = (s,r=document)=>[...r.querySelectorAll(s)];
@@ -541,15 +568,43 @@ function startCard(card){
   $('#moveList').innerHTML='';
   const sub=$('#lineSub');
   if(sub) sub.textContent = card.isPuzzle ? puzzleSubtitle(card) : '';
+  const plan=planFor(card), planCard=$('#planCard');
+  if(planCard){
+    $('#planGoal').textContent=plan.goal;
+    $('#planText').textContent=plan.text;
+    $('#planIdea').textContent=plan.idea;
+    $('#planAvoid').textContent=plan.avoid;
+    const source=$('#planSource'); if(source) source.href=plan.source;
+    planCard.hidden=false;
+  }
   updateSessBar();
   $('#hintBtn').disabled=$('#revealBtn').disabled=false;
   document.body.classList.toggle('blind-mode', !!play.blind);
   selected=null;
+  if(session.mode==='course' && session.idx===0 && card.courseId==='italian' && !session.conceptsDone){
+    session.conceptIndex=0;
+    setTimeout(showConceptQuestion, 350);
+    return;
+  }
   setTimeout(processStep, session.learn?500:350);
 }
 function updateSessBar(){
   $('#sessBarFill').style.width=(session.idx/session.queue.length*100)+'%';
   $('#sessCount').textContent=`${session.idx+1}/${session.queue.length}`;
+}
+
+function showConceptQuestion(){
+  if(!viewAlive() || !session || session.conceptIndex>=CONCEPT_LESSON.length){
+    session.conceptsDone=true; const panel=$('#conceptPanel'); if(panel) panel.hidden=true; processStep(); return;
+  }
+  const item=CONCEPT_LESSON[session.conceptIndex], panel=$('#conceptPanel');
+  if(!panel) return processStep();
+  panel.hidden=false; $('#conceptQuestion').textContent=item.q; $('#conceptFeedback').textContent='';
+  const host=$('#conceptOptions'); host.innerHTML='';
+  item.options.forEach((option,i)=>{ const b=document.createElement('button'); b.textContent=option; b.addEventListener('click',()=>{
+    if(i===item.correct){ b.classList.add('correct'); $('#conceptFeedback').textContent=item.explain; [...host.children].forEach(x=>x.disabled=true); session.conceptIndex++; setTimeout(showConceptQuestion,650); }
+    else { b.classList.add('incorrect'); $('#conceptFeedback').textContent='Non ancora. Rileggi l’obiettivo della posizione e riprova.'; setTimeout(()=>b.classList.remove('incorrect'),450); }
+  }); host.appendChild(b); });
 }
 
 function processStep(){
@@ -761,7 +816,8 @@ function parseFEN(fen){
 }
 function pieceHTML(ch){
   const color = (ch===ch.toUpperCase())?'white':'black';
-  return `<span class="piece ${color}">${GLYPHS[ch.toLowerCase()]}</span>`;
+  const asset = `${color[0]}${ch.toUpperCase()}.svg`;
+  return `<span class="piece ${color}"><img src="pieces/${asset}" alt="" draggable="false"></span>`;
 }
 function renderBoard(fen, whiteBot){
   const map=parseFEN(fen);
@@ -798,7 +854,8 @@ function flyPiece(from,to,ch,dur,cb){
   const a=sqCenter(from), b=sqCenter(to);
   const color=(ch===ch.toUpperCase())?'white':'black';
   const fly=document.createElement('div');
-  fly.className='flyer piece '+color; fly.textContent=GLYPHS[ch.toLowerCase()];
+  fly.className='flyer piece '+color;
+  fly.innerHTML=`<img src="pieces/${color[0]}${ch.toUpperCase()}.svg" alt="">`;
   fly.style.left=a.x+'px'; fly.style.top=a.y+'px'; fly.style.transform='translate(-50%,-50%)';
   boardWrap.appendChild(fly);
   requestAnimationFrame(()=>{ fly.style.transform=`translate(calc(-50% + ${b.x-a.x}px), calc(-50% + ${b.y-a.y}px))`; });
