@@ -282,7 +282,7 @@ const SND={
    =================================================================== */
 const app=$('#app');
 function tpl(id){ return document.importNode($('#'+id).content,true); }
-function clearView(){ app.innerHTML=''; }
+function clearView(){ cancelBoardAnimations(); app.innerHTML=''; }
 function go(view, arg){
   clearView();
   if(view==='home') renderHome();
@@ -555,6 +555,8 @@ function beginSession(queue, mode, learn){
 }
 
 function startCard(card){
+  cancelBoardAnimations();
+  engineBusy=false;
   // Opening lines always begin from the initial position; puzzles carry their
   // own start position. Everything downstream is identical.
   const start = card.startFen || STARTFEN;
@@ -592,7 +594,8 @@ function startCard(card){
     setTimeout(showConceptQuestion, 350);
     return;
   }
-  setTimeout(processStep, session.learn?500:350);
+  const startingPlay=play;
+  setTimeout(()=>{ if(play===startingPlay && viewAlive()) processStep(); }, session.learn?500:350);
 }
 function updateSessBar(){
   $('#sessBarFill').style.width=(session.idx/session.queue.length*100)+'%';
@@ -632,7 +635,10 @@ function processStep(){
     if(session.learn && edge.mine) setPrompt(`Book move: ${edge.san}`,'good');
     else setPrompt('', '');
     engineBusy=true;
-    setTimeout(()=>playEdge(edge, ()=>{ play.step++; processStep(); }), session.learn?750:430);
+    const pendingPlay=play;
+    setTimeout(()=>{
+      if(play===pendingPlay && viewAlive()) playEdge(edge, ()=>{ play.step++; processStep(); });
+    }, session.learn?750:430);
   }
 }
 
@@ -694,11 +700,15 @@ function onReveal(){
   setPrompt(play.card.isPuzzle ? `La soluzione è ${edge.san}.` : `The book move is ${edge.san}.`, '');
   play.awaiting=false; selected=null; clearSel();
   engineBusy=true;
-  setTimeout(()=>playEdge(edge, ()=>{
-    session.movesPlayed++; state.profile.totalMoves++;
-    play.wrongThisMove=0; play.hintThisMove=false;
-    play.step++; processStep();
-  }), 900);
+  const revealedPlay=play;
+  setTimeout(()=>{
+    if(play!==revealedPlay || !viewAlive()) return;
+    playEdge(edge, ()=>{
+      session.movesPlayed++; state.profile.totalMoves++;
+      play.wrongThisMove=0; play.hintThisMove=false;
+      play.step++; processStep();
+    });
+  }, 900);
 }
 
 function finishCard(){
@@ -831,7 +841,7 @@ function parseFEN(fen){
 function pieceHTML(ch){
   const color = (ch===ch.toUpperCase())?'white':'black';
   const asset = `${color[0]}${ch.toUpperCase()}.svg`;
-  return `<span class="piece ${color}"><img src="pieces/${asset}" alt="" draggable="false"></span>`;
+  return `<span class="piece ${color}" data-piece="${ch}"><img src="pieces/${asset}" alt="" draggable="false"></span>`;
 }
 function renderBoard(fen, whiteBot){
   const map=parseFEN(fen);
@@ -849,7 +859,24 @@ function renderBoard(fen, whiteBot){
       html+=`<div class="sq ${dark?'dk':'lt'}" data-square="${sqn}">${rankLbl}${fileLbl}${pc}</div>`;
     });
   });
-  board.innerHTML=html;
+  // Reuse the grid and decoded images between moves; replacing innerHTML on
+  // every frame transition caused visible gaps and SVG reloads on mobile.
+  if(board.dataset.orientation!==String(whiteBot) || board.children.length!==64){
+    board.innerHTML=html;
+    board.dataset.orientation=String(whiteBot);
+  }
+  for(const square of board.children){
+    const ch=map[square.dataset.square];
+    const piece=square.querySelector('.piece');
+    square.classList.remove('sel','lastfrom','lastto','hintfrom','hintto');
+    if(piece?.dataset.piece===ch) continue;
+    if(!ch){ piece?.remove(); continue; }
+    if(piece){
+      const color=ch===ch.toUpperCase()?'white':'black';
+      piece.dataset.piece=ch; piece.className='piece '+color;
+      piece.querySelector('img').src=`pieces/${color[0]}${ch.toUpperCase()}.svg`;
+    } else square.insertAdjacentHTML('beforeend',pieceHTML(ch));
+  }
 }
 function sqEl(square){ return board.querySelector(`[data-square="${square}"]`); }
 function markSel(square){ clearSel(); sqEl(square)?.classList.add('sel'); }
@@ -864,20 +891,25 @@ function sqCenter(square){
   const el=sqEl(square), br=boardWrap.getBoundingClientRect(), r=el.getBoundingClientRect();
   return {x:r.left-br.left+r.width/2, y:r.top-br.top+r.height/2};
 }
-function flyPiece(from,to,ch,dur,cb){
-  const a=sqCenter(from), b=sqCenter(to);
-  const color=(ch===ch.toUpperCase())?'white':'black';
-  const fly=document.createElement('div');
-  fly.className='flyer piece '+color;
-  fly.innerHTML=`<img src="pieces/${color[0]}${ch.toUpperCase()}.svg" alt="">`;
-  fly.style.left=a.x+'px'; fly.style.top=a.y+'px'; fly.style.transform='translate(-50%,-50%)';
-  boardWrap.appendChild(fly);
-  requestAnimationFrame(()=>{ fly.style.transform=`translate(calc(-50% + ${b.x-a.x}px), calc(-50% + ${b.y-a.y}px))`; });
-  setTimeout(()=>{ fly.remove(); cb&&cb(); }, dur+30);
+const boardAnimations=new Set();
+function cancelBoardAnimations(){
+  for(const animation of boardAnimations) animation.cancel();
+  boardAnimations.clear();
 }
-// Move animations run on timers. If you press Back (or the session ends) while
-// one is in flight, the view it was drawing into is already gone -- so every
-// deferred step checks the board is still on screen before touching the DOM.
+function animatePiece(from,to){
+  const piece=sqEl(from)?.querySelector('.piece');
+  if(!piece) return null;
+  const a=sqCenter(from), b=sqCenter(to);
+  const duration=matchMedia('(prefers-reduced-motion: reduce)').matches?0:240;
+  piece.classList.add('moving');
+  const animation=piece.animate([
+    {transform:'translate3d(0,0,0)'},
+    {transform:`translate3d(${b.x-a.x}px,${b.y-a.y}px,0)`}
+  ],{duration,easing:'cubic-bezier(.25,.1,.25,1)',fill:'forwards'});
+  boardAnimations.add(animation);
+  return {piece,to,animation};
+}
+// Delayed replies and animation callbacks must not draw into a view left behind.
 function viewAlive(){ return !!board && document.body.contains(board); }
 
 function playEdge(edge, cb){
@@ -893,26 +925,48 @@ function playEdge(edge, cb){
     cb&&cb();
     return;
   }
-  const map=parseFEN(play.fen);
-  const ch=map[edge.from];
-  // hide moving source piece during the flight
-  const srcPiece=sqEl(edge.from)?.querySelector('.piece'); if(srcPiece) srcPiece.remove();
+  const movingPlay=play, movingBoard=board;
   clearHints();
-  // animate rook too on castling
-  if(edge.castle){ const rch=map[edge.castle.from];
-    const rkPiece=sqEl(edge.castle.from)?.querySelector('.piece'); if(rkPiece) rkPiece.remove();
-    if(rch) flyPiece(edge.castle.from, edge.castle.to, rch, 220, null);
+  const moves=[animatePiece(edge.from,edge.to)];
+  if(edge.castle) moves.push(animatePiece(edge.castle.from,edge.castle.to));
+  const flights=moves.filter(Boolean);
+  const newPiece=parseFEN(edge.node.fen)[edge.to];
+  let promotionImage=null;
+  if(flights[0] && flights[0].piece.dataset.piece!==newPiece){
+    promotionImage=new Image(); promotionImage.alt=''; promotionImage.draggable=false;
+    promotionImage.src=`pieces/${newPiece===newPiece.toUpperCase()?'w':'b'}${newPiece.toUpperCase()}.svg`;
   }
-  const finish=()=>{
-    if(!viewAlive()) return;
+  // Decode the promoted piece offscreen while the pawn moves, so the switch
+  // never replaces a visible image with an SVG still waiting to be decoded.
+  const promotionReady=promotionImage ? promotionImage.decode().catch(()=>{}) : Promise.resolve();
+  // Finish on the browser's animation completion, not a separate timer that
+  // can remove the image before Safari has painted the destination frame.
+  Promise.all([...flights.map(move=>move.animation.finished),promotionReady]).then(()=>{
+    if(play!==movingPlay || board!==movingBoard || !viewAlive()) return;
+    for(const {piece,to,animation} of flights){
+      const target=sqEl(to);
+      target.querySelector('.piece')?.remove();
+      target.appendChild(piece);
+      if(to===edge.to && promotionImage){
+        piece.dataset.piece=newPiece;
+        piece.querySelector('img').replaceWith(promotionImage);
+      }
+      animation.cancel(); piece.classList.remove('moving');
+    }
     play.fen=edge.node.fen;
+    // Reconcile captures, en passant and promotion without touching other pieces.
     renderBoard(play.fen, whiteBottom);
     highlightLast(edge.from, edge.to);
     addMoveChip(edge);
     if(!edge.mine) SND.move();
     engineBusy=false; cb&&cb();
-  };
-  if(ch) flyPiece(edge.from, edge.to, ch, 220, finish); else finish();
+  }).catch(error=>{
+    if(error.name!=='AbortError') console.error('Move animation failed:',error);
+  }).finally(()=>{
+    for(const {piece,animation} of flights){
+      animation.cancel(); piece.classList.remove('moving'); boardAnimations.delete(animation);
+    }
+  });
 }
 // Animate a whole solved line from its start position. Used to show a
 // calculation puzzle's answer once the board comes back.
@@ -995,6 +1049,12 @@ function rolloverStreakCheck(){
   // if user missed a day, streak is recomputed on next completed session.
   // here we just display the stored streak (don't reset until a session).
 }
+const pieceImages='KQRBNPkqrbnp'.split('').map(ch=>{
+  const img=new Image();
+  img.src=`pieces/${ch===ch.toUpperCase()?'w':'b'}${ch.toUpperCase()}.svg`;
+  img.decode().catch(()=>{});
+  return img;
+});
 applyTheme(state.settings.theme);
 refreshTopbar();
 rolloverStreakCheck();

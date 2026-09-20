@@ -151,7 +151,7 @@ h2.section-title{font-size:1rem;letter-spacing:.08em;text-transform:uppercase;
 .sq .coord.file{right:3px;bottom:1px}
 .sq .coord.rank{left:3px;top:1px}
 .sq.lt .coord{color:var(--dark)} .sq.dk .coord{color:var(--light)}
-.piece{display:block;width:92%;height:92%;line-height:1;cursor:pointer;transition:transform .08s}
+.piece{display:block;width:92%;height:92%;line-height:1;cursor:pointer;position:relative}
 .piece img{display:block;width:100%;height:100%;object-fit:contain;user-select:none;-webkit-user-drag:none}
 .piece.white{color:#f7f2e6;text-shadow:0 0 1px #2b2b2b,0 1px 2px rgba(0,0,0,.45)}
 .piece.black{color:#262220;text-shadow:0 0 1px rgba(255,255,255,.28),0 1px 1px rgba(0,0,0,.3)}
@@ -162,9 +162,8 @@ h2.section-title{font-size:1rem;letter-spacing:.08em;text-transform:uppercase;
 .sq.bad-flash{animation:badflash .5s}
 @keyframes goodflash{0%,100%{box-shadow:inset 0 0 0 0 var(--good)}40%{box-shadow:inset 0 0 0 5px var(--good)}}
 @keyframes badflash{0%,100%{box-shadow:inset 0 0 0 0 var(--bad)}20%,60%{box-shadow:inset 0 0 0 5px var(--bad)}}
-/* floating animated piece */
-.flyer{position:absolute;z-index:8;pointer-events:none;width:12%;aspect-ratio:1;line-height:1;transition:transform .22s cubic-bezier(.3,.7,.3,1)}
-.flyer img{display:block;width:100%;height:100%;object-fit:contain}
+/* Only the moving piece needs a compositor layer; stationary images stay put. */
+.piece.moving{z-index:8;will-change:transform;pointer-events:none}
 .board-overlay{position:absolute;inset:0;pointer-events:none;display:flex;
   align-items:center;justify-content:center;font-size:2.6rem;font-weight:800;
   opacity:0;transition:opacity .15s}

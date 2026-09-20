@@ -1,5 +1,5 @@
-const CACHE = 'opening-trainer-v6';
-const ASSETS = ["./", "index.html", "style.css?v=6", "app.js?v=6", "coach.js?v=4", "public-puzzles.js?v=4", "puzzles-ui.js?v=6", "repertoire.js", "pwa.js?v=4", "manifest.webmanifest", "pieces/bB.svg", "pieces/bK.svg", "pieces/bN.svg", "pieces/bP.svg", "pieces/bQ.svg", "pieces/bR.svg", "pieces/wB.svg", "pieces/wK.svg", "pieces/wN.svg", "pieces/wP.svg", "pieces/wQ.svg", "pieces/wR.svg", "icons/apple-touch-icon.png", "icons/icon-192.png", "icons/icon-512.png"];
+const CACHE = 'opening-trainer-v7';
+const ASSETS = ["./", "index.html", "style.css?v=7", "app.js?v=7", "coach.js?v=4", "public-puzzles.js?v=4", "puzzles-ui.js?v=6", "repertoire.js", "pwa.js?v=4", "manifest.webmanifest", "pieces/bB.svg", "pieces/bK.svg", "pieces/bN.svg", "pieces/bP.svg", "pieces/bQ.svg", "pieces/bR.svg", "pieces/wB.svg", "pieces/wK.svg", "pieces/wN.svg", "pieces/wP.svg", "pieces/wQ.svg", "pieces/wR.svg", "icons/apple-touch-icon.png", "icons/icon-192.png", "icons/icon-512.png"];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS.map(url => new Request(url, {cache: 'reload'})))));
 });
