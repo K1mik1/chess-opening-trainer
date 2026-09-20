@@ -151,7 +151,7 @@ h2.section-title{font-size:1rem;letter-spacing:.08em;text-transform:uppercase;
 .sq .coord.file{right:3px;bottom:1px}
 .sq .coord.rank{left:3px;top:1px}
 .sq.lt .coord{color:var(--dark)} .sq.dk .coord{color:var(--light)}
-.piece{display:block;width:88%;height:88%;line-height:1;cursor:pointer;transition:transform .08s}
+.piece{display:block;width:92%;height:92%;line-height:1;cursor:pointer;transition:transform .08s}
 .piece img{display:block;width:100%;height:100%;object-fit:contain;user-select:none;-webkit-user-drag:none}
 .piece.white{color:#f7f2e6;text-shadow:0 0 1px #2b2b2b,0 1px 2px rgba(0,0,0,.45)}
 .piece.black{color:#262220;text-shadow:0 0 1px rgba(255,255,255,.28),0 1px 1px rgba(0,0,0,.3)}
@@ -405,4 +405,5 @@ body[data-view="train"] #app{max-width:1200px;padding:12px 12px 40px}
 .puzzle-help,.puzzle-source{font-size:.8rem;line-height:1.5}.puzzle-source a{color:var(--accent)}
 .puzzle-row{text-align:left;color:var(--ink);font:inherit;width:100%}.puzzle-row .cl-top{gap:12px}.puzzle-row .cl-top span{font-size:.75rem}.puzzle-row .cl-moves{display:block;margin-top:8px}
 .puzzle-actions button:disabled{opacity:.5;cursor:default}
-#nextPuzzle{margin:16px auto 0;display:block}
+#puzzleCompletion{display:flex;flex-direction:column;gap:8px;margin:0 0 16px}
+#nextPuzzle{margin:0;width:100%}

@@ -57,6 +57,7 @@ function renderPuzzleCatalogue(){
       Math.abs(a.meta.rating-puzzleRating())-Math.abs(b.meta.rating-puzzleRating())).slice(0,20);
     for(let i=candidates.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [candidates[i],candidates[j]]=[candidates[j],candidates[i]]; }
     beginSession(candidates.slice(0,10), mixed?'puzzle-mixed':'puzzle-practice', false);
+    session.puzzlePool=cards.slice();
   };
   const update = () => {
     const cards=select(), review=cards.filter(catalogueNeedsReview);
@@ -69,7 +70,13 @@ function renderPuzzleCatalogue(){
       const status=catalogueNeedsReview(card)?'Da riprovare':cardState(card.id)==='due'?'Ripasso previsto':srs(card.id)?.seen?'Affrontato':'Nuovo';
       row.innerHTML=`<span class="cl-top"><b>${card.name}</b><span>${status}</span></span>
         <span class="cl-moves">${card.courseName} · ${catalogueLevelName(card.meta.rating)} · ${card.meta.rating}</span>`;
-      row.addEventListener('click',()=>beginSession([card],'puzzle-practice',false)); list.appendChild(row);
+      row.addEventListener('click',()=>{
+        const index=cards.indexOf(card);
+        // Keep browsing order and active filters when continuing from a row.
+        beginSession(cards.slice(index).concat(cards.slice(0,index)), 'puzzle-practice', false);
+        session.puzzlePool=cards.slice();
+      });
+      list.appendChild(row);
     }
   };
   $('#puzzleTheme').addEventListener('change',update);
@@ -88,8 +95,24 @@ function showPuzzleResult(card, mistakes, next){
   $('#planAvoid').textContent='Guarda sempre anche la risposta migliore dell’avversario.';
   const source=$('#planSource'); source.href=card.meta.sourceUrl; source.textContent='Rivedi il problema su Lichess ↗';
   $('#hintBtn').disabled=$('#revealBtn').disabled=true;
+  $('.train-actions').style.display='none';
+  const controls=document.createElement('div'); controls.id='puzzleCompletion';
   const button=document.createElement('button'); button.className='big-btn small'; button.id='nextPuzzle';
-  button.textContent=session.idx+1<session.queue.length?'Prossimo problema →':'Vedi il risultato';
-  button.addEventListener('click',()=>{button.remove();next();},{once:true});
-  $('.train-info').appendChild(button);
+  button.textContent='Prossimo problema →';
+  button.addEventListener('click',()=>{
+    if(session.idx+1>=session.queue.length){
+      // Finishing a batch must not force a trip back through the catalogue.
+      const pool=session.puzzlePool?.length>1 ? session.puzzlePool : catalogueCards();
+      const candidates=pool.filter(c=>c.id!==card.id).sort((a,b)=>
+        Number(!!srs(a.id)?.seen)-Number(!!srs(b.id)?.seen) ||
+        Math.abs(a.meta.rating-puzzleRating())-Math.abs(b.meta.rating-puzzleRating()));
+      session.queue.push(...candidates.slice(0,10));
+    }
+    controls.remove(); next();
+  },{once:true});
+  const finish=document.createElement('button'); finish.className='ghost-btn'; finish.id='finishPuzzles';
+  finish.textContent='Termina sessione';
+  finish.addEventListener('click',()=>{controls.remove();finishSession();},{once:true});
+  controls.append(button,finish);
+  $('.train-info').prepend(controls);
 }

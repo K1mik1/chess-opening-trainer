@@ -584,6 +584,7 @@ function startCard(card){
   $('.plan-kicker').textContent=card.meta?.kind==='catalogue'?'SOLUZIONE':'PIANO DELLA POSIZIONE';
   updateSessBar();
   $('#hintBtn').disabled=$('#revealBtn').disabled=false;
+  $('.train-actions').style.display='';
   document.body.classList.toggle('blind-mode', !!play.blind);
   selected=null;
   if(session.mode==='course' && session.idx===0 && card.courseId==='italian' && !session.conceptsDone){
