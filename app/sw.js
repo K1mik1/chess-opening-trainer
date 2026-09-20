@@ -1,4 +1,4 @@
-const CACHE = 'opening-trainer-v1';
+const CACHE = 'opening-trainer-v2';
 const ASSETS = ["./", "index.html", "style.css", "app.js", "coach.js", "repertoire.js", "pwa.js", "manifest.webmanifest", "pieces/bB.svg", "pieces/bK.svg", "pieces/bN.svg", "pieces/bP.svg", "pieces/bQ.svg", "pieces/bR.svg", "pieces/wB.svg", "pieces/wK.svg", "pieces/wN.svg", "pieces/wP.svg", "pieces/wQ.svg", "pieces/wR.svg", "icons/apple-touch-icon.png", "icons/icon-192.png", "icons/icon-512.png"];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS)));
