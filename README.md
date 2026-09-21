@@ -602,6 +602,13 @@ licensed CC0. Downloaded locally, never redistributed here.
 
 Game history: the **[chess.com public API](https://www.chess.com/news/view/published-data-api)**.
 
+Piece artwork: the **Cburnett** set by Colin M.L. Burnett, from Wikimedia
+Commons, licensed CC BY-SA 3.0 — the set Lichess and Wikipedia use. The twelve
+files in `app/pieces/` carry their own `LICENSE.txt`. You can also load a set
+of your own from the app (Home → PEZZI): those files are kept in the browser
+on your device and never reach this repository, which is what makes it safe to
+use a set you own but may not redistribute.
+
 Analysis: **[Stockfish](https://stockfishchess.org/)**, which you install
 yourself and which this project runs as a separate process — no Stockfish code
 is included or linked here.
@@ -609,7 +616,8 @@ is included or linked here.
 ## License
 
 This project is MIT (see `LICENSE`). The bundled ECO opening data in
-`build/eco/` is CC0. The Lichess puzzle database is CC0 and is downloaded at
+`build/eco/` is CC0. The piece artwork in `app/pieces/` is CC BY-SA 3.0 and is
+licensed separately from the code (see `app/pieces/LICENSE.txt`). The Lichess puzzle database is CC0 and is downloaded at
 setup time rather than redistributed. Stockfish is GPL-3.0 and is used as an
 external program, not bundled.
 

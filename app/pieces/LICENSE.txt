@@ -1,0 +1,9 @@
+Piece artwork: the "Cburnett" set
+Author: Colin M.L. Burnett
+Source: Wikimedia Commons (Chess {piece}{l,d}t45.svg)
+Licence: CC BY-SA 3.0 — https://creativecommons.org/licenses/by-sa/3.0/
+
+These twelve SVG files are licensed separately from the rest of this
+repository. They may be reused, including commercially, provided the author
+is credited and modified versions keep the same licence. This is the set
+Lichess and Wikipedia's chess articles use.

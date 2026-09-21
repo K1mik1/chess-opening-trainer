@@ -424,3 +424,8 @@ body[data-view="train"] #app{max-width:1200px;padding:12px 12px 40px}
 
 .puzzle-row:disabled{opacity:.6;cursor:default}
 #puzzleMore{margin-top:16px}
+
+/* ---- a piece set loaded from the reader's own device ---- */
+.pieceset{margin:18px 0 4px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:8px}
+.pieceset .section-label{color:var(--muted);font-size:.8rem;text-transform:uppercase;letter-spacing:.08em}
+.pieceset p{margin:0;max-width:34em}

@@ -421,6 +421,12 @@ function renderHome(){
   themeWrap.appendChild(sw);
   app.querySelector('.home').appendChild(themeWrap);
 
+  // piece set: lives next to the board theme, since both change how the board
+  // looks. Optional module, like the others.
+  if(typeof renderPieceSetSection==='function'){
+    renderPieceSetSection(app.querySelector('.home'));
+  }
+
   // small footer: daily new-line setting + reset
   const foot=document.createElement('div');
   foot.style.cssText='margin-top:26px;text-align:center;color:var(--muted);font-size:.8rem';
@@ -852,10 +858,16 @@ function parseFEN(fen){
     }
   } return map;
 }
+// Every piece image goes through here, so a set the reader loaded from their
+// own device (pieceset.js) can replace the bundled artwork without any other
+// part of the app knowing about it.
+function pieceSrc(ch){
+  const own = (typeof customPieceSrc==='function') ? customPieceSrc(ch) : null;
+  return own || `pieces/${ch===ch.toUpperCase()?'w':'b'}${ch.toUpperCase()}.svg?v=12`;
+}
 function pieceHTML(ch){
   const color = (ch===ch.toUpperCase())?'white':'black';
-  const asset = `${color[0]}${ch.toUpperCase()}.svg?v=11`;
-  return `<span class="piece ${color}" data-piece="${ch}"><img src="pieces/${asset}" alt="" draggable="false"></span>`;
+  return `<span class="piece ${color}" data-piece="${ch}"><img src="${pieceSrc(ch)}" alt="" draggable="false"></span>`;
 }
 function renderBoard(fen, whiteBot){
   const map=parseFEN(fen);
@@ -888,7 +900,7 @@ function renderBoard(fen, whiteBot){
     if(piece){
       const color=ch===ch.toUpperCase()?'white':'black';
       piece.dataset.piece=ch; piece.className='piece '+color;
-      piece.querySelector('img').src=`pieces/${color[0]}${ch.toUpperCase()}.svg?v=11`;
+      piece.querySelector('img').src=pieceSrc(ch);
     } else square.insertAdjacentHTML('beforeend',pieceHTML(ch));
   }
 }
@@ -948,7 +960,7 @@ function playEdge(edge, cb){
   let promotionImage=null;
   if(flights[0] && flights[0].piece.dataset.piece!==newPiece){
     promotionImage=new Image(); promotionImage.alt=''; promotionImage.draggable=false;
-    promotionImage.src=`pieces/${newPiece===newPiece.toUpperCase()?'w':'b'}${newPiece.toUpperCase()}.svg?v=11`;
+    promotionImage.src=pieceSrc(newPiece);
   }
   // Decode the promoted piece offscreen while the pawn moves, so the switch
   // never replaces a visible image with an SVG still waiting to be decoded.
@@ -1065,7 +1077,7 @@ function rolloverStreakCheck(){
 }
 const pieceImages='KQRBNPkqrbnp'.split('').map(ch=>{
   const img=new Image();
-  img.src=`pieces/${ch===ch.toUpperCase()?'w':'b'}${ch.toUpperCase()}.svg?v=11`;
+  img.src=pieceSrc(ch);
   img.decode().catch(()=>{});
   return img;
 });
