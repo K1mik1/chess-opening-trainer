@@ -1,1 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 45 45"><path stroke="#000" stroke-linecap="round" stroke-width="1.5" d="M22.5 9a4 4 0 0 0-3.22 6.38 6.48 6.48 0 0 0-.87 10.65c-3 1.06-7.41 5.55-7.41 13.47h23c0-7.92-4.41-12.41-7.41-13.47a6.46 6.46 0 0 0-.87-10.65A4.01 4.01 0 0 0 22.5 9z"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">
+<!-- Original rounded Staunton artwork for Opening Trainer. -->
+<defs><linearGradient id="body" x1="0" y1="0" x2="0.7" y2="1"><stop stop-color="#626460"/><stop offset="1" stop-color="#30322f"/></linearGradient></defs>
+<ellipse cx="48" cy="88" rx="29" ry="3" fill="#171b14" opacity=".2"/>
+<g fill="url(#body)" stroke="#1d211d" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round">
+<path d="M34 47C38 54 36 64 28 73H68C60 64 58 54 62 47Z"/>
+<rect x="30" y="43" width="36" height="9" rx="4.5"/>
+<circle cx="48" cy="29" r="16"/>
+<path d="M29 71H67L73 81H23Z"/>
+<rect x="21" y="79" width="54" height="9" rx="4"/>
+</g>
+<path d="M27 82H68" fill="none" stroke="#91948c" stroke-width="1.8" stroke-linecap="round" opacity=".55"/>
+</svg>
