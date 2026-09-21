@@ -406,3 +406,18 @@ body[data-view="train"] #app{max-width:1200px;padding:12px 12px 40px}
 .puzzle-actions button:disabled{opacity:.5;cursor:default}
 #puzzleCompletion{display:flex;flex-direction:column;gap:8px;margin:0 0 16px}
 #nextPuzzle{margin:0;width:100%}
+
+/* ---- books: annotated games imported from the reader's own PDFs ---- */
+.books-entry{margin:24px 0;padding:18px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius)}
+.books-entry h2{margin:0}.books-entry p{margin:8px 0 14px}
+.books-actions{display:flex;gap:10px;margin:14px 0}
+.book-course{margin-bottom:22px;display:flex;flex-direction:column;gap:10px}
+.book-course h2{margin:0 0 2px}
+.book-course .cd-line{display:flex;flex-direction:column;gap:3px;text-align:left;width:100%}
+/* The commentary is the point of these courses, so it gets reading measure
+   rather than the compact spacing the drill screens use. */
+.book-game #bookComment{margin:10px 0 0;line-height:1.55;max-width:42em}
+.book-game #bookMove{font-size:1.05rem;margin-top:6px}
+.book-actions{flex-wrap:wrap}
+.book-actions .big-btn{margin:0}
+.book-actions button:disabled{opacity:.45;cursor:default}

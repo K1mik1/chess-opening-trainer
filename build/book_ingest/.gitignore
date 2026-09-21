@@ -1,0 +1,8 @@
+# Tutto cio' che deriva dal contenuto di un libro resta fuori dal repo: le
+# mosse sono fatti, i commenti dell'autore no, e questo e' un repo pubblico.
+# Qui dentro va solo il codice che estrae; i corsi prodotti vivono sul
+# dispositivo di chi possiede il libro.
+*.json
+*.png
+cols/
+crops/

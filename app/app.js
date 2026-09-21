@@ -293,6 +293,10 @@ function go(view, arg){
   else if(view==='pack')  { if(typeof renderPack==='function')  renderPack(arg); else return go('home'); }
   else if(view==='coach') { if(typeof renderCoach==='function') renderCoach();   else return go('home'); }
   else if(view==='lesson'){ if(typeof renderLesson==='function') renderLesson(arg); else return go('home'); }
+  // Book courses live in books.js and are imported by the reader, so the views
+  // only exist when that module is present.
+  else if(view==='books'){ if(typeof renderBooks==='function') renderBooks(); else return go('home'); }
+  else if(view==='bookgame'){ if(typeof renderBookGame==='function') renderBookGame(arg); else return go('home'); }
   document.body.dataset.view=view;
 }
 document.addEventListener('click', e=>{
@@ -387,6 +391,9 @@ function renderHome(){
   }
   if(typeof renderLessonsSection==='function'){
     renderLessonsSection(app.querySelector('.home'));
+  }
+  if(typeof renderBooksSection==='function'){
+    renderBooksSection(app.querySelector('.home'));
   }
 
   renderBadges($('#badgeRow'));
