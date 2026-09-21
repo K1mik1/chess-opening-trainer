@@ -242,7 +242,7 @@ function buildTacticsQueue(budget){
   const add = c => { if(!seen.has(c.id)){ seen.add(c.id); out.push(c); } };
 
   // 1. due reviews (retired cards are not 'due', so they never appear)
-  const due = allTacticCards().filter(c => cardState(c.id) === 'due')
+  const due = allTacticCards().filter(c => cardState(c.id) === 'due' && catalogueAvailable(c))
                               .sort((a, b) => srs(a.id).due - srs(b.id).due);
   due.slice(0, Math.ceil(budget / 2)).forEach(add);
 
@@ -259,7 +259,7 @@ function buildTacticsQueue(budget){
   // 3. top up from the packs built out of your own games
   if(out.length < budget){
     const mine = puzzleRating();
-    PUZZLES.filter(c => cardState(c.id) === 'new')
+    PUZZLES.filter(c => cardState(c.id) === 'new' && catalogueAvailable(c))
       .sort((a, b) => Math.abs((a.meta.rating || mine) - mine)
                     - Math.abs((b.meta.rating || mine) - mine))
       .slice(0, budget - out.length).forEach(add);

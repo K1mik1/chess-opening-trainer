@@ -61,7 +61,7 @@ const DEFAULTS = () => ({
   v:1,
   profile:{xp:0, streak:0, bestStreak:0, lastDay:null, totalMoves:0,
            sessionsDone:0, perfectSessions:0,
-           puzzleRating:null, puzzlesDone:0, puzzlesSolved:0},
+           puzzleRating:null, puzzlesDone:0, puzzlesSolved:0, catalogueCompletions:0},
   cards:{},                 // cardId -> {seen,ease,interval,due,reps,lapses,lastGrade,clean}
   lessons:{},               // lessonId -> {rung,clean,tries,interval,due,mastered}
   badges:{},
@@ -106,6 +106,7 @@ function importProgress(){
     state={...d,...s, profile:{...d.profile,...s.profile},
            settings:{...d.settings,...s.settings}, cards:s.cards||{},
            lessons:s.lessons||{}, badges:s.badges||{}};
+    migrateCatalogueHistory();
     save(); applyTheme(state.settings.theme); refreshTopbar(); go('home');
     toast(`Restored ${state.profile.xp} XP, ${Object.keys(state.cards).length} cards.`,'');
   };
@@ -550,6 +551,8 @@ function startCourse(courseId, learn){
 function startLine(card, learn){ beginSession([card], learn?'learn':'line', learn); }
 
 function beginSession(queue, mode, learn){
+  queue=queue.filter(catalogueAvailable);
+  if(!queue.length){ toast('Questi problemi sono in pausa. Scegli un altro tema o livello.',''); return; }
   session={queue, idx:0, mode, learn, results:[], xpGained:0,
            movesPlayed:0, firstTry:0, requeues:0};
   clearView(); app.appendChild(tpl('tpl-train'));
@@ -736,7 +739,10 @@ function finishCard(){
   }
   if(grade){
     schedule(play.card.id, grade);
-    if(play.card.meta?.kind==='catalogue') srs(play.card.id).needsReview=mistakes>0;
+    if(play.card.meta?.kind==='catalogue'){
+      srs(play.card.id).needsReview=mistakes>0;
+      recordCatalogueCompletion(play.card);
+    }
     session.results.push({id:play.card.id, grade, mistakes});
     // Puzzles rate you as much as you rate them: a clean solve nudges your
     // puzzle rating up, so the app keeps serving material at the right level
@@ -762,7 +768,7 @@ function finishCard(){
     if(grade==='easy'){ addXp(25); toast('Perfect line! +25 XP','good'); miniConfetti(); }
     else if(grade==='good'){ addXp(10); }
     // re-queue lapses once for immediate relearn (daily/course only)
-    if(grade==='again' && session.mode!=='line' && session.requeues<6 && !play.requeued){
+    if(play.card.meta?.kind!=='catalogue' && grade==='again' && session.mode!=='line' && session.requeues<6 && !play.requeued){
       session.queue.push(play.card); session.requeues++; play.requeued=true;
     }
     // Every reviewed line counts on its own — credit the day and check badges
@@ -774,6 +780,7 @@ function finishCard(){
   const advance = () => {
     if(!viewAlive() || session!==finishedSession) return;
     session.idx++;
+    while(session.idx<session.queue.length && !catalogueAvailable(session.queue[session.idx])) session.idx++;
     if(session.idx>=session.queue.length) return finishSession();
     startCard(session.queue[session.idx]);
     updateSessBar();
@@ -1065,5 +1072,6 @@ const pieceImages='KQRBNPkqrbnp'.split('').map(ch=>{
 applyTheme(state.settings.theme);
 refreshTopbar();
 rolloverStreakCheck();
+migrateCatalogueHistory();
 rebalanceBacklog();
 go('home');
