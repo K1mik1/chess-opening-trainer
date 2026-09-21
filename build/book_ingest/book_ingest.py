@@ -79,6 +79,19 @@ def legal_from_start(san):
     except ValueError:
         return False
 
+def is_prose(text):
+    """Distingue una riga di testo dal rumore di un diagramma.
+
+    Contare le parole non basta: l'ultima riga di un paragrafo e' spesso una
+    parola sola ("kingside.") e veniva buttata, troncando il commento proprio
+    sulla battuta finale. Il rumore dei diagrammi invece produce sigle
+    maiuscole e frammenti senza vocali ("ADIWOANE", "as ae y"), quindi il
+    discrimine e' la presenza di una parola scritta come si scrive una parola.
+    """
+    words = re.findall(r"[A-Za-z][A-Za-z'-]{3,}", text)
+    real = [w for w in words if re.search(r'[aeiou]', w[1:], re.I) and not w.isupper()]
+    return bool(real)
+
 def plausible(b):
     if len(b.pieces(chess.KING, chess.WHITE)) != 1: return False
     if len(b.pieces(chess.KING, chess.BLACK)) != 1: return False
@@ -111,8 +124,7 @@ def build_games(rows, cache, diagram_rows):
     board = chess.Board(); expected = 1; prose = []; model = None
     for i, r in enumerate(rows):
         if r.get('prose'):
-            w = [x for x in r['raw'].split() if len(x) > 2 and re.search(r'[aeiou]', x, re.I)]
-            if len(w) >= 3 and cur: prose.append(r['raw'])
+            if cur and is_prose(r['raw']): prose.append(r['raw'])
             continue
         if r.get('diagram'):
             if not cur: continue

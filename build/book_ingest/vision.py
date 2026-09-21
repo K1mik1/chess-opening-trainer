@@ -67,3 +67,20 @@ def read_diagram(png, model=MODEL):
     for tok in t.replace('`', ' ').split():
         if tok.count('/') == 7: return tok
     return None
+
+
+def ask_text(prompt, model=MODEL, max_tokens=3000):
+    """Domanda di solo testo, senza immagine: serve alla ripulitura dei commenti."""
+    body = {'model': model, 'max_tokens': max_tokens,
+            'messages': [{'role': 'user', 'content': prompt}]}
+    req = urllib.request.Request(URL, data=json.dumps(body).encode(), headers={
+        'Authorization': f"Bearer {os.environ['OPENROUTER_API_KEY']}",
+        'Content-Type': 'application/json'})
+    for attempt in range(4):
+        try:
+            with urllib.request.urlopen(req, timeout=180) as r:
+                out = json.load(r); break
+        except urllib.error.HTTPError as e:
+            if e.code in (429, 502, 503) and attempt < 3: time.sleep(5 * (attempt + 1)); continue
+            raise
+    return (out['choices'][0]['message'].get('content') or '').strip()
