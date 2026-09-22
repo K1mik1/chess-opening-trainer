@@ -165,12 +165,14 @@ function showPuzzleResult(card, mistakes, next){
     if(!remaining.length) remaining.push(...continuationPool().slice(0,10));
     if(!remaining.length){ finishSession(); go('puzzles'); return; }
     session.queue.splice(session.idx+1,session.queue.length,...remaining);
+    $('.train-actions').insertBefore($('#puzzleHistory'), $('#revealBtn'));
     controls.remove(); next();
   },{once:true});
   const finish=document.createElement('button'); finish.className='ghost-btn'; finish.id='finishPuzzles';
   finish.textContent='Termina sessione';
   finish.addEventListener('click',()=>{controls.remove();finishSession();},{once:true});
   controls.prepend(button);
+  controls.appendChild($('#puzzleHistory'));
   controls.appendChild(finish);
   $('.train-info').prepend(controls);
 }

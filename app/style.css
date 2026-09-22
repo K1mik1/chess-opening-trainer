@@ -452,3 +452,11 @@ body[data-view="bookgame"] #app{max-width:1200px;padding:12px 12px 40px}
 #puzzleHistory:not([hidden]){display:inline-flex;gap:6px}
 .train-actions{flex-wrap:wrap}.train-actions button:disabled{opacity:.4;cursor:default}
 @media(max-width:560px){#topbar{padding:8px 14px;gap:10px}#homeMenus>section{padding:18px}.train-actions{gap:8px}#puzzleHistory button{padding:10px}}
+
+/* Keep the completed puzzle controls within thumb reach below the board. */
+#puzzleCompletion{display:grid;grid-template-columns:3fr 2fr;grid-template-areas:"history next" "finish next";gap:8px}
+#puzzleCompletion #puzzleHistory{grid-area:history;display:grid;grid-template-columns:1fr 1fr;gap:8px;min-width:0}
+#puzzleCompletion #nextPuzzle{grid-area:next;margin:0;white-space:normal;line-height:1.25;padding:12px 8px;font-size:.95rem}
+#puzzleCompletion #finishPuzzles{grid-area:finish}
+#puzzleCompletion .ghost-btn{min-width:0;min-height:44px;padding:10px 6px;font-size:.85rem}
+#puzzleCompletion>p{grid-column:1/-1;grid-row:3;margin:0;font-size:.85rem}

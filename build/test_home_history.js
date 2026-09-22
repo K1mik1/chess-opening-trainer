@@ -50,7 +50,21 @@ const {chromium}=require('playwright');
  await page.locator('#prevMove').click();await page.locator('#nextMove').click();
  assert.equal(await page.evaluate(()=>JSON.stringify(state)),solved);
  assert.equal(await page.locator('.train-info button:visible').first().getAttribute('id'),'nextPuzzle');
- await page.screenshot({path:'/tmp/chess-history-v15.png',fullPage:true});
+ for(const width of [375,390,1440]){
+ await page.setViewportSize({width,height:900});
+ const prev=await page.locator('#prevMove').boundingBox(), next=await page.locator('#nextMove').boundingBox();
+ const finish=await page.locator('#finishPuzzles').boundingBox(), problem=await page.locator('#nextPuzzle').boundingBox();
+ assert(prev.x<next.x && next.x<problem.x);
+ assert(finish.y>prev.y && Math.abs(problem.y-prev.y)<1);
+ assert(Math.abs(problem.y+problem.height-finish.y-finish.height)<1);
+ assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+ }
+ await page.setViewportSize({width:390,height:844});
+ await page.locator('#puzzleCompletion').screenshot({path:'/tmp/chess-completion-v16.png'});
+ await page.locator('#nextPuzzle').click();
+ await page.waitForFunction(()=>play.step===0&&play.awaiting);
+ assert.equal(await page.locator('.train-actions #puzzleHistory').count(),1);
+ assert(await page.locator('#prevMove').isDisabled());
  assert.deepEqual(errors,[]);console.log('PASS: home ordering, mobile sizing, openings navigation, puzzle history without spoilers or grading changes.');
  }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});
