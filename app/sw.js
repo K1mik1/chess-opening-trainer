@@ -1,5 +1,5 @@
-const CACHE = 'opening-trainer-v14';
-const ASSETS = ["./", "index.html", "style.css?v=12", "app.js?v=11", "coach.js?v=9", "public-puzzles.js?v=9", "puzzles-ui.js?v=9", "books.js?v=1", "pieceset.js?v=1", "repertoire.js", "pwa.js?v=4", "manifest.webmanifest", "pieces/bB.svg?v=12", "pieces/bK.svg?v=12", "pieces/bN.svg?v=12", "pieces/bP.svg?v=12", "pieces/bQ.svg?v=12", "pieces/bR.svg?v=12", "pieces/wB.svg?v=12", "pieces/wK.svg?v=12", "pieces/wN.svg?v=12", "pieces/wP.svg?v=12", "pieces/wQ.svg?v=12", "pieces/wR.svg?v=12", "icons/apple-touch-icon.png", "icons/icon-192.png", "icons/icon-512.png"];
+const CACHE = 'opening-trainer-v15';
+const ASSETS = ["./", "index.html", "style.css?v=15", "app.js?v=15", "coach.js?v=15", "public-puzzles.js?v=9", "puzzles-ui.js?v=15", "books.js?v=1", "pieceset.js?v=1", "repertoire.js", "pwa.js?v=4", "manifest.webmanifest", "pieces/bB.svg?v=12", "pieces/bK.svg?v=12", "pieces/bN.svg?v=12", "pieces/bP.svg?v=12", "pieces/bQ.svg?v=12", "pieces/bR.svg?v=12", "pieces/wB.svg?v=12", "pieces/wK.svg?v=12", "pieces/wN.svg?v=12", "pieces/wP.svg?v=12", "pieces/wQ.svg?v=12", "pieces/wR.svg?v=12", "icons/apple-touch-icon.png", "icons/icon-192.png", "icons/icon-512.png"];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS.map(url => new Request(url, {cache: 'reload'})))));
 });

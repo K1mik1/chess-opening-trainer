@@ -146,7 +146,8 @@ function showPuzzleResult(card, mistakes, next){
   $('#planAvoid').textContent='Guarda sempre anche la risposta migliore dell’avversario.';
   const source=$('#planSource'); source.href=card.meta.sourceUrl; source.textContent='Rivedi il problema su Lichess ↗';
   $('#hintBtn').disabled=$('#revealBtn').disabled=true;
-  $('.train-actions').style.display='none';
+  $('#hintBtn').hidden=$('#revealBtn').hidden=true;
+  syncPuzzleHistory();
   const controls=document.createElement('div'); controls.id='puzzleCompletion';
   const button=document.createElement('button'); button.className='big-btn small'; button.id='nextPuzzle';
   button.textContent='Prossimo problema →';

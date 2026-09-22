@@ -438,3 +438,17 @@ body[data-view="bookgame"] #app{max-width:1200px;padding:12px 12px 40px}
 .pieceset{margin:18px 0 4px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:8px}
 .pieceset .section-label{color:var(--muted);font-size:.8rem;text-transform:uppercase;letter-spacing:.08em}
 .pieceset p{margin:0;max-width:34em}
+
+/* Compact home navigation, with opening theory on its own screen. */
+#topbar{justify-content:flex-start;gap:14px;padding:10px 18px}
+.header-welcome{border:0;background:none;color:var(--ink);text-align:left;padding:0;margin-right:auto;cursor:pointer;font:inherit}
+.header-welcome span{display:block;font-weight:700;font-size:1rem}
+.header-welcome small,.header-progress small{display:block;color:var(--muted);font-size:.72rem}
+.header-progress{text-align:center}.header-progress b{font-size:1.1rem}
+#homeMenus{display:grid;gap:16px}
+#homeMenus>section{margin:0;padding:22px;border:1px solid var(--line);border-radius:12px;background:var(--card)}
+#homeMenus h2{margin:0 0 8px}#homeMenus p{margin:8px 0}#homeMenus .big-btn{margin:12px 0 0}
+#homeSettings{margin-top:26px}#homeSettings summary{cursor:pointer;color:var(--muted);padding:12px 0}
+#puzzleHistory:not([hidden]){display:inline-flex;gap:6px}
+.train-actions{flex-wrap:wrap}.train-actions button:disabled{opacity:.4;cursor:default}
+@media(max-width:560px){#topbar{padding:8px 14px;gap:10px}#homeMenus>section{padding:18px}.train-actions{gap:8px}#puzzleHistory button{padding:10px}}

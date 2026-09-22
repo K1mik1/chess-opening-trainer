@@ -9,19 +9,15 @@
 <meta name="apple-mobile-web-app-title" content="Scacchi">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<link rel="stylesheet" href="style.css?v=12">
+<link rel="stylesheet" href="style.css?v=15">
 </head>
 <body>
 <canvas id="confetti"></canvas>
 
 <header id="topbar">
-  <div class="brand" data-nav="home">♞ Opening&nbsp;Trainer</div>
-  <div class="stats">
-    <div class="stat" id="streakStat" title="Day streak">🔥 <span id="streakVal">0</span></div>
-    <div class="stat" id="levelStat" title="Level">Lv <span id="levelVal">1</span></div>
-    <div class="xpbar" title="XP to next level"><div id="xpfill"></div><span id="xpText"></span></div>
-    <button id="muteBtn" class="icon-btn" title="Sound on/off">🔊</button>
-  </div>
+  <button class="header-welcome" data-nav="home" aria-label="Torna alla Home"><span id="greeting"></span><small>Pronto ad allenarti?</small></button>
+  <div class="header-progress" title="Repertorio di aperture padroneggiato"><b id="ringPct">0%</b><small>repertorio</small></div>
+  <button id="muteBtn" class="icon-btn" title="Sound on/off">🔊</button>
 </header>
 
 <main id="app"><!-- views injected here --></main>
@@ -29,27 +25,21 @@
 <!-- ====== HOME VIEW TEMPLATE ====== -->
 <template id="tpl-home">
   <section class="view home">
-    <div class="hero">
-      <div class="hero-text">
-        <h1 id="greeting">Welcome back</h1>
-        <p id="subgreeting" class="muted"></p>
-      </div>
-      <div class="ring" id="dailyRing">
-        <svg viewBox="0 0 120 120">
-          <circle class="ring-bg" cx="60" cy="60" r="52"></circle>
-          <circle class="ring-fg" id="ringFg" cx="60" cy="60" r="52"></circle>
-        </svg>
-        <div class="ring-label"><span id="ringPct">0%</span><small>today</small></div>
-      </div>
-    </div>
-
+    <div id="homeMenus"></div>
+    <details id="homeSettings"><summary>Aspetto e impostazioni</summary><div id="badgeRow" class="badge-row"></div></details>
+  </section>
+</template>
+<template id="tpl-openings">
+  <section class="view openings">
+    <button class="back" data-nav="home">‹ Home</button>
+    <h1>Aperture</h1>
+    <p class="muted">Teoria, lezioni e allenamento del tuo repertorio.</p>
     <button id="startBtn" class="big-btn">▶ Start today's training</button>
     <div id="dueSummary" class="due-summary"></div>
 
     <h2 class="section-title">Your repertoire</h2>
     <div id="courseGrid" class="course-grid"></div>
 
-    <div id="badgeRow" class="badge-row"></div>
   </section>
 </template>
 
@@ -87,6 +77,7 @@
       <div class="moves" id="moveList"></div>
       <div class="train-actions">
         <button id="hintBtn" class="ghost-btn">💡 Hint</button>
+        <span id="puzzleHistory" hidden><button id="prevMove" class="ghost-btn" aria-label="Mossa precedente">‹ Indietro</button><button id="nextMove" class="ghost-btn" aria-label="Mossa successiva">Avanti ›</button></span>
         <button id="revealBtn" class="ghost-btn">I forgot — show me</button>
       </div>
     </div>
@@ -96,7 +87,7 @@
 <!-- ====== COURSE DETAIL TEMPLATE ====== -->
 <template id="tpl-course">
   <section class="view course-detail">
-    <button class="back" data-nav="home">‹ Back</button>
+    <button class="back" data-nav="openings">‹ Aperture</button>
     <h1 id="cdName"></h1>
     <p id="cdSummary" class="muted summary"></p>
     <div class="cd-actions">
@@ -111,7 +102,7 @@
 <!-- ====== LESSON TEMPLATE ====== -->
 <template id="tpl-lesson">
   <section class="view lesson-detail">
-    <button class="back" data-nav="home">‹ Back</button>
+    <button class="back" data-nav="openings">‹ Aperture</button>
     <span class="ls-kicker">Lesson</span>
     <h1 id="lsTitle"></h1>
     <p id="lsDiag" class="ls-diag"></p>
@@ -158,11 +149,11 @@
      which calls into it during the first render. -->
 <script src="exercises.js"></script>
 <script src="public-puzzles.js?v=9"></script>
-<script src="coach.js?v=9"></script>
-<script src="puzzles-ui.js?v=9"></script>
+<script src="coach.js?v=15"></script>
+<script src="puzzles-ui.js?v=15"></script>
 <script src="books.js?v=1"></script>
 <script src="pieceset.js?v=1"></script>
-<script src="app.js?v=11"></script>
+<script src="app.js?v=15"></script>
 <script src="pwa.js?v=4"></script>
 </body>
 </html>

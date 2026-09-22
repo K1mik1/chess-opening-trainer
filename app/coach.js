@@ -456,8 +456,8 @@ function acplVerdict(a){
 }
 
 /* ---------------- home-screen section ---------------- */
-function renderTacticsSection(host){
-  renderPuzzleEntry(host);
+function renderTacticsSection(host, includeCatalogue=true){
+  if(includeCatalogue) renderPuzzleEntry(host);
   if(!PACKS.some(p => p.kind !== 'catalogue')) return;
   const wrap = document.createElement('div');
   wrap.innerHTML = `<h2 class="section-title">Your weaknesses

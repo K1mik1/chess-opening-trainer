@@ -248,11 +248,9 @@ function rebalanceBacklog(){
 function levelInfo(xp){ let lvl=1, need=100, rem=xp;
   while(rem>=need){ rem-=need; lvl++; need=100+(lvl-1)*50; } return {lvl,into:rem,need}; }
 function refreshTopbar(){
-  const li=levelInfo(state.profile.xp);
-  $('#levelVal').textContent=li.lvl;
-  $('#streakVal').textContent=state.profile.streak;
-  $('#xpfill').style.width=(li.into/li.need*100)+'%';
-  $('#xpText').textContent=`${li.into}/${li.need} XP`;
+  const hr=new Date().getHours();
+  $('#greeting').textContent=hr<12?'Buongiorno':hr<18?'Buon pomeriggio':'Buonasera';
+  $('#ringPct').textContent=overallMastery()+'%';
   $('#muteBtn').textContent=state.settings.muted?'🔇':'🔊';
 }
 
@@ -287,6 +285,7 @@ function clearView(){ cancelBoardAnimations(); app.innerHTML=''; }
 function go(view, arg){
   clearView();
   if(view==='home') renderHome();
+  else if(view==='openings') renderOpenings();
   else if(view==='puzzles') renderPuzzleCatalogue();
   else if(view==='course') renderCourse(arg);
   // Coach views live in coach.js, which is optional — fall back home rather
@@ -311,20 +310,19 @@ $('#muteBtn').addEventListener('click',()=>{
 /* ---------------- HOME ---------------- */
 function renderHome(){
   app.appendChild(tpl('tpl-home'));
-  const p=state.profile;
-  const hr=new Date().getHours();
-  $('#greeting').textContent =
-    (hr<12?'Good morning':hr<18?'Good afternoon':'Good evening')+' — ready to train?';
-  const mastery=overallMastery();
-  $('#subgreeting').textContent =
-    `Level ${levelInfo(p.xp).lvl} · ${p.streak}-day streak · ${mastery}% of your repertoire mastered`;
+  refreshTopbar();
+  const menus=$('#homeMenus');
+  renderPuzzleEntry(menus);
+  const openings=document.createElement('section');
+  openings.className='openings-entry';
+  openings.innerHTML=`<h2>Aperture</h2><p>Teoria, lezioni e varianti in un unico posto.</p><p class="muted">${COURSES.length} aperture nel tuo repertorio</p><button class="big-btn small" data-nav="openings">♞ Studia le aperture</button>`;
+  menus.appendChild(openings);
+  if(typeof renderBooksSection==='function') renderBooksSection(menus);
+  renderHomeSettings();
+}
 
-  // mastery ring
-  const C=2*Math.PI*52;
-  $('#ringFg').style.strokeDashoffset = C*(1-mastery/100);
-  $('#ringPct').textContent = mastery+'%';
-  $('.ring-label small').textContent='mastered';
-
+function renderOpenings(){
+  app.appendChild(tpl('tpl-openings'));
   // due summary
   const due=dueCount(), nw=Math.min(newAvailable(), state.settings.newPerDay);
   const nextNew=CARDS.find(c=>cardState(c.id)==='new');
@@ -386,17 +384,11 @@ function renderHome(){
     for(const c of list) grid.appendChild(buildCard(c));
     group.appendChild(grid); host.appendChild(group);
   }
-  // lessons first (the diagnosis), then the raw packs they came from
-  if(typeof renderTacticsSection==='function'){
-    renderTacticsSection(app.querySelector('.home'));
-  }
-  if(typeof renderLessonsSection==='function'){
-    renderLessonsSection(app.querySelector('.home'));
-  }
-  if(typeof renderBooksSection==='function'){
-    renderBooksSection(app.querySelector('.home'));
-  }
+  if(typeof renderTacticsSection==='function') renderTacticsSection(app.querySelector('.openings'), false);
+  if(typeof renderLessonsSection==='function') renderLessonsSection(app.querySelector('.openings'));
+}
 
+function renderHomeSettings(){
   renderBadges($('#badgeRow'));
 
   // board theme picker
@@ -419,12 +411,12 @@ function renderHome(){
     sw.appendChild(b);
   }
   themeWrap.appendChild(sw);
-  app.querySelector('.home').appendChild(themeWrap);
+  $('#homeSettings').appendChild(themeWrap);
 
   // piece set: lives next to the board theme, since both change how the board
   // looks. Optional module, like the others.
   if(typeof renderPieceSetSection==='function'){
-    renderPieceSetSection(app.querySelector('.home'));
+    renderPieceSetSection($('#homeSettings'));
   }
 
   // small footer: daily new-line setting + reset
@@ -448,7 +440,7 @@ function renderHome(){
     <br><span style="opacity:.75">Progress is stored only in this browser.
     <a id="exportLink" href="#" style="color:var(--muted)">Back up to a file</a>
     &nbsp;·&nbsp; <a id="importLink" href="#" style="color:var(--muted)">Restore from a file</a></span>`;
-  app.querySelector('.home').appendChild(foot);
+  $('#homeSettings').appendChild(foot);
   $('#exportLink').addEventListener('click',e=>{ e.preventDefault(); exportProgress(); });
   $('#importLink').addEventListener('click',e=>{ e.preventDefault(); importProgress(); });
   $('#npd').addEventListener('change',e=>{ state.settings.newPerDay=+e.target.value; save(); go('home'); });
@@ -565,6 +557,8 @@ function beginSession(queue, mode, learn){
   board=$('#board'); boardWrap=$('.board-wrap'); overlay=$('#boardOverlay');
   $('#hintBtn').addEventListener('click', onHint);
   $('#revealBtn').addEventListener('click', onReveal);
+  $('#prevMove').addEventListener('click',()=>reviewPuzzleMove(-1));
+  $('#nextMove').addEventListener('click',()=>reviewPuzzleMove(1));
   board.addEventListener('click', onBoardClick);
   document.body.dataset.view='train';
   startCard(session.queue[0]);
@@ -578,7 +572,7 @@ function startCard(card){
   const start = card.startFen || STARTFEN;
   play={card, color:card.color, edges:card.edges, fen:start, step:0,
         wrong:0, hintMoves:0, wrongThisMove:0, hintThisMove:false, requeued:false,
-        blind: !!card.blind, shownFen:start};
+        reviewPly:null, blind: !!card.blind, shownFen:start};
   whiteBottom = card.color==='white';
   renderBoard(start, whiteBottom);
   $('#lineName').textContent = card.isPuzzle
@@ -603,6 +597,8 @@ function startCard(card){
   updateSessBar();
   $('#hintBtn').disabled=$('#revealBtn').disabled=false;
   $('.train-actions').style.display='';
+  $('#hintBtn').hidden=$('#revealBtn').hidden=false;
+  syncPuzzleHistory();
   document.body.classList.toggle('blind-mode', !!play.blind);
   selected=null;
   if(session.mode==='course' && session.idx===0 && card.courseId==='italian' && !session.conceptsDone){
@@ -634,6 +630,7 @@ function showConceptQuestion(){
 
 function processStep(){
   if(!viewAlive()) return;
+  syncPuzzleHistory();
   if(play.step>=play.edges.length){ return finishCard(); }
   const edge=play.edges[play.step];
   if(edge.mine && !session.learn){
@@ -659,7 +656,7 @@ function processStep(){
 }
 
 function onBoardClick(e){
-  if(!play || !play.awaiting || engineBusy || session.learn) return;
+  if(!play || play.reviewPly!=null || !play.awaiting || engineBusy || session.learn) return;
   const sq=e.target.closest('.sq'); if(!sq) return;
   const square=sq.dataset.square;
   const map=parseFEN(play.fen);
@@ -700,15 +697,42 @@ function onBoardClick(e){
   }
 }
 
+// Review is a display cursor only: it never changes the live position or grading.
+function syncPuzzleHistory(){
+  const host=$('#puzzleHistory');
+  if(!host || !play) return;
+  host.hidden=!play.card.isPuzzle || play.blind;
+  const ply=play.reviewPly ?? play.step;
+  $('#prevMove').disabled=engineBusy || ply===0;
+  $('#nextMove').disabled=engineBusy || ply===play.step;
+  $('#hintBtn').disabled=$('#revealBtn').disabled=play.reviewPly!=null || play.step>=play.edges.length;
+}
+function reviewPuzzleMove(direction){
+  if(!play?.card.isPuzzle || play.blind || engineBusy || !viewAlive()) return;
+  const ply=Math.max(0,Math.min(play.step,(play.reviewPly ?? play.step)+direction));
+  if(play.reviewPly==null){
+    play.livePrompt={text:$('#turnPrompt').textContent, cls:$('#turnPrompt').className};
+  }
+  play.reviewPly=ply===play.step?null:ply;
+  selected=null; clearSel(); clearHints();
+  renderBoard(ply?play.edges[ply-1].node.fen:play.card.startFen,whiteBottom);
+  if(ply) highlightLast(play.edges[ply-1].from,play.edges[ply-1].to);
+  if(play.reviewPly==null){
+    $('#turnPrompt').textContent=play.livePrompt.text;
+    $('#turnPrompt').className=play.livePrompt.cls;
+  }else setPrompt(`Rivedi le mosse · ${ply}/${play.step} — premi Avanti per tornare al problema.`, '');
+  syncPuzzleHistory();
+}
+
 function onHint(){
-  if(!play||!play.awaiting||session.learn) return;
+  if(!play||play.reviewPly!=null||!play.awaiting||engineBusy||session.learn) return;
   const edge=play.edges[play.step];
   highlightHint(edge.from, null);
   if(!play.hintThisMove){ play.hintThisMove=true; play.hintMoves++; }
   setPrompt('Hint: move the highlighted piece.', '');
 }
 function onReveal(){
-  if(!play||!play.awaiting||engineBusy||session.learn) return;
+  if(!play||play.reviewPly!=null||!play.awaiting||engineBusy||session.learn) return;
   const edge=play.edges[play.step];
   if(!play.hintThisMove) play.hintMoves++;
   play.hintThisMove=true;
