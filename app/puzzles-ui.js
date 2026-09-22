@@ -49,6 +49,30 @@ function catalogueCandidates(cards){
     Math.abs(a.meta.rating-puzzleRating())-Math.abs(b.meta.rating-puzzleRating()));
 }
 
+function puzzlePreferences(){
+  const saved=state.settings.puzzlePreferences || {};
+  return {
+    level:['base','medio','sfida'].includes(saved.level)?saved.level:'all',
+    theme:PACKS.some(p=>p.kind==='catalogue' && p.id===saved.theme)?saved.theme:'all'
+  };
+}
+function selectedPuzzleCards(){
+  const {level,theme}=puzzlePreferences();
+  return catalogueCards().filter(c=>(theme==='all'||c.packId===theme) &&
+    (level==='all'||catalogueLevel(c.meta.rating)===level));
+}
+function startSelectedPuzzles(cards=selectedPuzzleCards(), mixed=true){
+  const candidates=catalogueCandidates(cards).slice(0,20);
+  if(!candidates.length){
+    toast('Nessun problema disponibile con queste impostazioni. Puoi modificarle o tornare più avanti.','');
+    return;
+  }
+  for(let i=candidates.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [candidates[i],candidates[j]]=[candidates[j],candidates[i]]; }
+  beginSession(candidates.slice(0,10),mixed?'puzzle-mixed':'puzzle-practice',false);
+  // Keep the same selection when the initial queue runs out, including its difficulty.
+  session.puzzlePool=cards.slice();
+}
+
 function renderPuzzleEntry(host){
   const cards = catalogueCards();
   if(!cards.length) return;
@@ -59,7 +83,16 @@ function renderPuzzleEntry(host){
   section.innerHTML = `<h2>Problemi di scacchi</h2>
     <p>${cards.length.toLocaleString('it-IT')} posizioni · 8 temi · 3 livelli</p>
     <p class="muted">${seen} affrontati · ${review} da riprovare</p>
-    <button class="big-btn small" data-nav="puzzles">♟ Scegli i problemi</button>`;
+    <p id="savedPuzzleSelection" class="muted"></p>
+    <div class="puzzle-entry-actions">
+      <button class="ghost-btn" data-nav="puzzles">⚙ Impostazioni</button>
+      <button class="big-btn small" id="startSavedPuzzles">▶ Inizia problemi</button>
+    </div>`;
+  const prefs=puzzlePreferences();
+  const level={all:'Tutti i livelli',base:'Base · 500–999',medio:'Intermedio · 1000–1399',sfida:'Sfida · 1400–1800'}[prefs.level];
+  const theme=PACKS.find(p=>p.id===prefs.theme)?.name || 'Tutti i temi';
+  section.querySelector('#savedPuzzleSelection').textContent=`${level} · ${theme}`;
+  section.querySelector('#startSavedPuzzles').addEventListener('click',()=>startSelectedPuzzles());
   host.insertBefore(section, host.querySelector('.section-title'));
 }
 
@@ -67,8 +100,8 @@ function renderPuzzleCatalogue(){
   const section = document.createElement('section');
   section.className = 'view puzzle-catalogue';
   section.innerHTML = `<button class="back" data-nav="home">‹ Indietro</button>
-    <h1>Problemi di scacchi</h1>
-    <p class="muted">Scegli un tema oppure allenati senza indizi con una sessione mista.</p>
+    <h1>Impostazioni problemi</h1>
+    <p class="muted">Scegli difficoltà e tipo di problemi. Le modifiche restano salvate su questo dispositivo, anche quando chiudi la PWA.</p>
     <div class="puzzle-filters">
       <label>Tema<select id="puzzleTheme"><option value="all">Tutti i temi</option></select></label>
       <label>Difficoltà<select id="puzzleLevel"><option value="all">Tutti i livelli</option>
@@ -90,16 +123,11 @@ function renderPuzzleCatalogue(){
     const option = document.createElement('option'); option.value=pack.id; option.textContent=pack.name;
     $('#puzzleTheme').appendChild(option);
   }
-  const select = () => catalogueCards().filter(c =>
-    ($('#puzzleTheme').value==='all' || c.packId===$('#puzzleTheme').value) &&
-    ($('#puzzleLevel').value==='all' || catalogueLevel(c.meta.rating)===$('#puzzleLevel').value));
-  const start = (cards, mixed) => {
-    const candidates=catalogueCandidates(cards).slice(0,20);
-    if(!candidates.length){ toast('Nessun problema disponibile: cambia tema o difficoltà.',''); return; }
-    for(let i=candidates.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [candidates[i],candidates[j]]=[candidates[j],candidates[i]]; }
-    beginSession(candidates.slice(0,10), mixed?'puzzle-mixed':'puzzle-practice', false);
-    session.puzzlePool=cards.slice();
-  };
+  const preferences=puzzlePreferences();
+  $('#puzzleTheme').value=preferences.theme;
+  $('#puzzleLevel').value=preferences.level;
+  const select=selectedPuzzleCards;
+  const start=startSelectedPuzzles;
   let visibleCount=100;
   const update = () => {
     const cards=select(), available=cards.filter(catalogueAvailable);
@@ -129,7 +157,10 @@ function renderPuzzleCatalogue(){
     $('#puzzleMore').hidden=visibleCount>=cards.length;
   };
   $('#puzzleMore').addEventListener('click',()=>{visibleCount+=100;update();});
-  const resetFilters=()=>{visibleCount=100;update();};
+  const resetFilters=()=>{
+    state.settings.puzzlePreferences={theme:$('#puzzleTheme').value,level:$('#puzzleLevel').value};
+    save(); visibleCount=100; update();
+  };
   $('#puzzleTheme').addEventListener('change',resetFilters);
   $('#puzzleLevel').addEventListener('change',resetFilters);
   $('#puzzleMixed').addEventListener('click',()=>start(select(),true));
