@@ -314,8 +314,15 @@ def puzzle_rating_band(prof, cfg):
     then adapts within it based on how you are actually doing, which corrects
     any error in this estimate without needing a rebuild.
     """
+    # The +150 guess assumes puzzle and game strength track each other, and
+    # for many players they do not: solving with unlimited time and the
+    # knowledge that a tactic exists is a different skill from spotting one
+    # unprompted. Someone who knows their puzzle rating can state it in
+    # coach_config.local.json and skip the estimate entirely.
+    stated = cfg["exercises"].get("puzzle_rating")
     base = (prof.get("rating", {}) or {}).get("recent_avg") or 900
-    centre = max(600, min(2400, base + 150))
+    centre = int(stated) if stated else max(600, min(2400, base + 150))
+    centre = max(600, min(2800, centre))
     band = cfg["exercises"]["rating_band"]
     return centre, (max(400, centre - band), centre + band + 200)
 

@@ -26,7 +26,16 @@ CATEGORIES = [
     ('hangingPiece', 'Pezzi indifesi', 'Riconosci e cattura il materiale non protetto.'),
     ('endgame', 'Finali', 'Allena tecnica e tattica con pochi pezzi sulla scacchiera.'),
 ]
-BANDS = [(500, 1000, 100), (1000, 1400, 100), (1400, 1801, 50)]
+# Le fasce partono piu' in alto e sono molto piu' popolose della prima
+# versione: i problemi si risolvono con tempo illimitato e sapendo che una
+# tattica esiste, quindi la difficolta' utile sta sopra il rating di partita.
+# Le due bande centrali sono le piu' fitte perche' e' li' che si allena.
+# Il numero e' limitato dal peso, non dalla disponibilita': ogni problema
+# porta la posizione completa dopo ogni mossa e costa ~900 byte, quindi
+# 14.800 diventavano 13 MB da scaricare sul telefono. Con 700 per tema si
+# resta intorno ai 5 MB, e sono comunque 350 problemi per tema sopra 1500
+# contro i 50 della prima versione: il collo di bottiglia non e' la quantita'.
+BANDS = [(800, 1200, 100), (1200, 1500, 250), (1500, 1800, 250), (1800, 2200, 100)]
 PER_CATEGORY = sum(count for _, _, count in BANDS)
 TOTAL = len(CATEGORIES) * PER_CATEGORY
 
@@ -62,19 +71,35 @@ def convert(row):
 
 
 def select(existing):
-    pools = {(theme, i): [] for theme, _, _ in CATEGORIES for i in range(3)}
+    pools = {(theme, i): [] for theme, _, _ in CATEGORIES for i in range(len(BANDS))}
     seen = set()
     positions = set()
     # Keep every published ID in its original category so local progress survives.
     for category in existing:
         for row in category['rows']:
-            band = next(i for i, (lo, hi, _) in enumerate(BANDS) if lo <= int(row['Rating']) < hi)
+            band = next((i for i, (lo, hi, _) in enumerate(BANDS)
+                         if lo <= int(row['Rating']) < hi), None)
+            if band is None:
+                continue          # pubblicato sotto vecchie fasce: non si ripesca
             pools[category['theme'], band].append(row)
             seen.add(row['PuzzleId'])
             positions.add(' '.join(convert(row)['startFen'].split()[:4]))
-    if len(seen) == TOTAL:
-        return existing
-    with urlopen(URL, timeout=60) as response:
+    # Le quote possono anche SCENDERE fra una build e l'altra (il catalogo era
+    # troppo pesante da scaricare): in quel caso le pool vanno tagliate alla
+    # quota nuova, tenendo i problemi gia' pubblicati, invece di cercarne altri
+    # fino a esaurire il database.
+    for (theme, band), rows in pools.items():
+        quota = BANDS[band][2]
+        if len(rows) > quota:
+            del rows[quota:]
+    if all(len(pools[theme, i]) >= BANDS[i][2]
+           for theme, _, _ in CATEGORIES for i in range(len(BANDS))):
+        return [{'theme': theme,
+                 'rows': sum((pools[theme, i] for i in range(len(BANDS))), [])}
+                for theme, _, _ in CATEGORIES]
+    local = ROOT / 'data' / 'raw' / 'lichess_db_puzzle.csv.zst'
+    source = open(local, 'rb') if local.exists() else urlopen(URL, timeout=60)
+    with source as response:
         with zstandard.ZstdDecompressor().stream_reader(response) as stream:
             for row in csv.DictReader(io.TextIOWrapper(stream)):
                 rating = int(row['Rating'])
@@ -104,7 +129,7 @@ def select(existing):
                 if len(seen) % 250 == 0:
                     print(f'Selezionati {len(seen)}/{TOTAL}', flush=True)
                 if len(seen) == TOTAL:
-                    return [{'theme': theme, 'rows': sum((pools[theme, i] for i in range(3)), [])}
+                    return [{'theme': theme, 'rows': sum((pools[theme, i] for i in range(len(BANDS))), [])}
                             for theme, _, _ in CATEGORIES]
     raise RuntimeError('Database exhausted before filling all categories')
 
